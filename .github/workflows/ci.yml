@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_ENV: production
+      SECRET_KEY: ci-secret-key-change-me
+      ENCRYPTION_KEY: FbfA95Ns7rrcSJHNpXGLSWNH1jFB1FU6Bxlk-UiWEyI=
+      DATABASE_URL: sqlite:///./ci_test.db
+      REDIS_URL: redis://localhost:6379/0
+      GO_LIVE_SKIP_COMPOSE: "1"
+      GO_LIVE_BASE_URL: http://127.0.0.1:8050
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile critical modules
+        run: |
+          python -m py_compile app/__init__.py
+          python -m py_compile app/web/tenant/users.py
+          python -m py_compile app/web/tenant/schedules.py
+          python -m py_compile app/web/billing/routes.py
+
+      - name: Run test suite
+        run: |
+          pytest -q
+
+      - name: Start app for smoke checks
+        run: |
+          nohup python -m uvicorn main:app --host 127.0.0.1 --port 8050 >/tmp/uvicorn.log 2>&1 &
+          sleep 5
+          curl -fsS http://127.0.0.1:8050/healthz
+          curl -fsS http://127.0.0.1:8050/readyz
+
+      - name: Go-live automated checks
+        run: |
+          python scripts/go_live_check.py
+
+      - name: Print server log on failure
+        if: failure()
+        run: |
+          echo "=== /tmp/uvicorn.log ==="
+          cat /tmp/uvicorn.log || true

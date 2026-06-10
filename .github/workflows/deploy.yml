@@ -1,0 +1,86 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      ref:
+        description: "Branch ou tag para deploy"
+        required: true
+        default: main
+        type: string
+      run_migrations:
+        description: "Executar migrações Alembic"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_URL: ${{ secrets.DEPLOY_URL }}
+          TARGET_REF: ${{ inputs.ref }}
+          RUN_MIGRATIONS: ${{ inputs.run_migrations }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          envs: DEPLOY_PATH,DEPLOY_URL,TARGET_REF,RUN_MIGRATIONS
+          script: |
+            set -euo pipefail
+
+            if [ -z "${DEPLOY_PATH}" ] || [ -z "${DEPLOY_URL}" ]; then
+              echo "DEPLOY_PATH e DEPLOY_URL são obrigatórios."
+              exit 1
+            fi
+
+            cd "${DEPLOY_PATH}"
+
+            PREV_COMMIT="$(git rev-parse HEAD)"
+            echo "Commit atual: ${PREV_COMMIT}"
+
+            git fetch --all --prune
+            git checkout "${TARGET_REF}"
+            git pull --ff-only origin "${TARGET_REF}"
+
+            if ! docker compose up -d --build app celery celery_beat celery_vpn; then
+              docker compose up -d --build app celery celery_beat
+            fi
+
+            if [ "${RUN_MIGRATIONS}" = "true" ]; then
+              docker compose exec -T app alembic upgrade head
+            fi
+
+            HEALTH_OK=0
+            for i in $(seq 1 20); do
+              if curl -fsS "${DEPLOY_URL}/healthz" >/dev/null && curl -fsS "${DEPLOY_URL}/readyz" >/dev/null; then
+                HEALTH_OK=1
+                break
+              fi
+              sleep 3
+            done
+
+            if [ "${HEALTH_OK}" -ne 1 ]; then
+              echo "Health check falhou. Iniciando rollback para ${PREV_COMMIT}"
+              git checkout "${PREV_COMMIT}"
+              if ! docker compose up -d --build app celery celery_beat celery_vpn; then
+                docker compose up -d --build app celery celery_beat
+              fi
+              exit 1
+            fi
+
+            echo "Deploy concluído com sucesso em ${DEPLOY_URL}"

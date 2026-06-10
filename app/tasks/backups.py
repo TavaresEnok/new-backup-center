@@ -1911,13 +1911,27 @@ def _jump_host_lock_context(device_id: str, task_id: str | None = None, bulk_tas
 
     client = get_redis_client()
     if not client:
-        logger.warning(
-            "Redis indisponivel; seguindo sem lock de Jump Host para %s (%s).",
-            device_id,
-            lock_info["label"],
+        message = (
+            "Redis indisponivel; nao e seguro executar backup via Jump Host "
+            f"sem controle de concorrencia para {lock_info['label']}."
         )
-        yield {**lock_info, "max_slots": lock_info.get("base_slots") or 1}
-        return
+        logger.error("%s device=%s", message, device_id)
+        try:
+            append_task_log(task_id, "Sistema", message, "error")
+        except Exception:
+            logger.exception("Falha ao registrar indisponibilidade do Redis para %s", device_id)
+        try:
+            inc_counter(
+                "jump_host_slot_acquire_total",
+                labels={
+                    "jump_host": lock_info["label"],
+                    "result": "redis_unavailable",
+                    "slots": "0",
+                },
+            )
+        except Exception:
+            logger.exception("Falha ao registrar metrica de Redis indisponivel")
+        raise JumpHostSlotTimeoutError(message)
 
     base_slots = max(1, int(lock_info.get("base_slots") or lock_info.get("max_slots") or 1))
     max_slots = _resolve_effective_jump_host_slots(
