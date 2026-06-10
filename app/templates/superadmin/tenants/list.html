@@ -1,0 +1,295 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Clientes | Super Admin{% endblock %}
+
+{% block content %}
+<style>
+    /* tenants/list — re-skin Quiet Operations (tokens) */
+    .page-shell { max-width: 1320px; margin: 0 auto; }
+    .eyebrow { font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--pine); }
+    .section-kicker { font-size: .72rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+    .card-label { font-size: .76rem; font-weight: 600; letter-spacing: .02em; color: var(--ink-3); }
+    .card-value-xl { margin-top: .4rem; font-family: var(--serif); font-size: 2rem; line-height: 1; font-weight: 400; color: var(--ink); }
+    .card-caption { margin-top: .35rem; font-size: .76rem; color: var(--ink-3); line-height: 1.4; }
+    .tenant-hero { border: 1px solid var(--line); border-radius: var(--r3); background: var(--surface); box-shadow: var(--sh-1); }
+    .metric-card { border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); box-shadow: var(--sh-1); transition: border-color .15s ease, transform .15s ease, box-shadow .15s; }
+    .metric-card:hover { border-color: var(--line-2); transform: translateY(-1px); box-shadow: var(--sh-2); }
+    .metrics-strip { max-width: 1120px; margin: 0 auto; }
+    .filters-layout { display: grid; gap: .65rem; grid-template-columns: 1fr; }
+    @media (min-width: 1280px) {
+        .filters-layout { grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(145px, 1fr)) minmax(210px, 1.15fr); align-items: center; }
+    }
+    .metric-danger { border-left: 3px solid var(--crit); }
+    .metric-warning { border-left: 3px solid var(--care); }
+    .metric-good { border-left: 3px solid var(--good); }
+    .status-pill { display: inline-flex; align-items: center; gap: .35rem; border-radius: 9999px; padding: .15rem .6rem; font-size: .72rem; font-weight: 600; }
+    .status-pill-good { background: var(--good-soft); color: var(--good); }
+    .status-pill-warn { background: var(--care-soft); color: var(--care); }
+    .status-pill-danger { background: var(--crit-soft); color: var(--crit); }
+    .tenant-table { width: 100%; border-collapse: collapse; }
+    .tenant-table th { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 600; padding: .7rem .9rem; border-bottom: 1px solid var(--line); text-align: left; }
+    .tenant-table td { padding: .8rem .9rem; border-bottom: 1px solid var(--line); font-size: .87rem; color: var(--ink); vertical-align: top; }
+    .tenant-table tbody tr { transition: background-color .12s ease; }
+    .tenant-table tbody tr:hover { background: var(--surface-2); }
+</style>
+
+{% set commercial_risk = stats.subscription_trial + stats.subscription_pending_payment + stats.subscription_past_due + stats.subscription_canceled %}
+
+<div class="page-shell space-y-6 pb-5">
+    <section class="tenant-hero p-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="eyebrow">Super Admin</p>
+                <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-[var(--text-main)]">Clientes</h1>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-muted)]">Gestao comercial e operacional dos clientes SaaS.</p>
+            </div>
+            <a href="{{ url_for('superadmin_tenants.add_tenant') }}"
+                class="inline-flex items-center rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                Novo cliente
+            </a>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+            <span class="rounded-lg border border-[var(--line-color)] bg-[var(--line-color)] px-2.5 py-1 text-xs text-[var(--text-main)]">Ativos em cobrança: {{ stats.subscription_active }}</span>
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-xs text-[var(--text-main)]">Past due: {{ stats.subscription_past_due }}</span>
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-xs text-[var(--text-main)]">Trial: {{ stats.subscription_trial }}</span>
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-xs text-[var(--text-main)]">Pagamento pendente: {{ stats.subscription_pending_payment }}</span>
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-xs text-[var(--text-main)]">Sem plano: {{ stats.no_plan }}</span>
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-xs text-[var(--text-main)]">Acesso ilimitado: {{ stats.unlimited_access }}</span>
+            <a href="{{ url_for('superadmin_tenants.list_tenants', status='trash') }}" class="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs text-rose-300">Lixeira: {{ stats.trash }}</a>
+        </div>
+    </section>
+
+    <div class="metrics-strip grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <a href="{{ url_for('superadmin_tenants.list_tenants') }}" class="metric-card p-4">
+            <p class="card-label">Total de clientes</p>
+            <p class="card-value-xl text-[var(--text-main)]">{{ stats.total }}</p>
+            <p class="card-caption">Base cadastrada</p>
+        </a>
+        <a href="{{ url_for('superadmin_tenants.list_tenants', status='active') }}" class="metric-card metric-good p-4">
+            <p class="card-label">Clientes ativos</p>
+            <p class="card-value-xl text-emerald-300">{{ stats.active }}</p>
+            <p class="card-caption">Operacao habilitada</p>
+        </a>
+        <a href="{{ url_for('superadmin_tenants.list_tenants', ops='payment_risk') }}" class="metric-card metric-danger p-4">
+            <p class="card-label">Risco comercial</p>
+            <p class="card-value-xl text-rose-300">{{ commercial_risk }}</p>
+            <p class="card-caption">Trial, pagamento pendente, past due ou cancelado</p>
+        </a>
+        <a href="{{ url_for('superadmin_tenants.list_tenants', ops='no_plan') }}" class="metric-card metric-warning p-4">
+            <p class="card-label">Sem plano</p>
+            <p class="card-value-xl text-amber-300">{{ stats.no_plan }}</p>
+            <p class="card-caption">Revisao de faturamento</p>
+        </a>
+        <a href="{{ url_for('superadmin_tenants.list_tenants', status='trash') }}" class="metric-card p-4">
+            <p class="card-label">Na lixeira</p>
+            <p class="card-value-xl text-rose-300">{{ stats.trash }}</p>
+            <p class="card-caption">Clientes removidos com restauração</p>
+        </a>
+    </div>
+
+    <section class="premium-card p-4">
+        <div class="mb-3 flex items-center justify-between">
+            <h2 class="section-kicker">Filtros</h2>
+            <a href="{{ url_for('superadmin_tenants.list_tenants') }}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">Limpar filtros</a>
+        </div>
+        <form method="GET" class="filters-layout">
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome, slug ou e-mail..."
+                class="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-main)]">
+            <select name="status" class="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-main)]">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>Status: todos</option>
+                <option value="active" {% if status == 'active' %}selected{% endif %}>Ativos</option>
+                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inativos</option>
+                <option value="trash" {% if status == 'trash' %}selected{% endif %}>Lixeira</option>
+            </select>
+            <select name="subscription" class="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-main)]">
+                <option value="all" {% if subscription == 'all' %}selected{% endif %}>Assinatura: todas</option>
+                <option value="trial" {% if subscription == 'trial' %}selected{% endif %}>Trial</option>
+                <option value="active" {% if subscription == 'active' %}selected{% endif %}>Active</option>
+                <option value="pending_payment" {% if subscription == 'pending_payment' %}selected{% endif %}>Pending payment</option>
+                <option value="past_due" {% if subscription == 'past_due' %}selected{% endif %}>Past due</option>
+                <option value="canceled" {% if subscription == 'canceled' %}selected{% endif %}>Canceled</option>
+            </select>
+            <select name="ops" class="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-main)]">
+                <option value="all" {% if ops == 'all' %}selected{% endif %}>Operação: todos</option>
+                <option value="payment_risk" {% if ops == 'payment_risk' %}selected{% endif %}>Em risco comercial</option>
+                <option value="payment_pending" {% if ops == 'payment_pending' %}selected{% endif %}>Pagamento pendente</option>
+                <option value="past_due" {% if ops == 'past_due' %}selected{% endif %}>Somente past due</option>
+                <option value="no_plan" {% if ops == 'no_plan' %}selected{% endif %}>Sem plano</option>
+                <option value="no_devices" {% if ops == 'no_devices' %}selected{% endif %}>Sem dispositivos</option>
+                <option value="no_admin" {% if ops == 'no_admin' %}selected{% endif %}>Sem admin no cliente</option>
+            </select>
+            <select name="sort" class="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-main)]">
+                <option value="created_desc" {% if sort == 'created_desc' %}selected{% endif %}>Criação recente</option>
+                <option value="created_asc" {% if sort == 'created_asc' %}selected{% endif %}>Criação antiga</option>
+                <option value="name_asc" {% if sort == 'name_asc' %}selected{% endif %}>Nome A-Z</option>
+                <option value="name_desc" {% if sort == 'name_desc' %}selected{% endif %}>Nome Z-A</option>
+            </select>
+            <div class="flex gap-2 xl:justify-end">
+                <select name="per_page" class="w-full rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-main)]">
+                    <option value="20" {% if per_page == 20 %}selected{% endif %}>20 / pág</option>
+                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / pág</option>
+                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / pág</option>
+                </select>
+                <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Aplicar</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="premium-card overflow-hidden">
+        <div class="border-b border-[var(--line-color)] px-4 py-3">
+            <p class="text-sm font-semibold text-[var(--text-main)]">Lista de clientes</p>
+            <p class="text-xs text-[var(--text-muted)]">{{ total }} resultado(s) com os filtros atuais.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="tenant-table min-w-full">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Plano / Assinatura</th>
+                        <th>Uso</th>
+                        <th>Backup 24h</th>
+                        <th>Status</th>
+                        <th class="text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    {% set t = row.tenant %}
+                    <tr>
+                        <td>
+                            <p class="font-medium text-[var(--text-main)]">{{ t.name }}</p>
+                            <p class="text-xs text-[var(--text-muted)]">{{ t.slug }} • {{ t.email }}</p>
+                        </td>
+                        <td>
+                            <p class="text-[var(--text-main)]">{{ row.plan_label }}</p>
+                            <p class="text-xs text-[var(--text-muted)]">{{ (t.subscription_status or 'unknown')|replace('_', ' ')|title }}</p>
+                        </td>
+                        <td>{{ row.devices_count }} disp. • {{ row.users_count }} usuários</td>
+                        <td>
+                            <span class="text-emerald-300">S: {{ row.success_24h }}</span>
+                            <span class="mx-1 text-[var(--text-muted)]">/</span>
+                            <span class="text-rose-300">F: {{ row.failed_24h }}</span>
+                        </td>
+                        <td>
+                            {% if t.is_active %}
+                            <span class="status-pill status-pill-good">Ativo</span>
+                            {% elif t.deleted_at %}
+                            <span class="status-pill status-pill-danger">Na lixeira</span>
+                            {% else %}
+                            <span class="status-pill status-pill-danger">Inativo</span>
+                            {% endif %}
+                            {% if (t.subscription_status or '') == 'pending_payment' %}
+                            <span class="status-pill status-pill-warn mt-1">Pagamento pendente</span>
+                            {% endif %}
+                            {% if (t.subscription_status or '') == 'past_due' %}
+                            <span class="status-pill status-pill-warn mt-1">Past due</span>
+                            {% elif (t.subscription_status or '') == 'canceled' %}
+                            <span class="status-pill status-pill-danger mt-1">Canceled</span>
+                            {% endif %}
+                            {% if t.deleted_at %}
+                            <p class="mt-1 text-[11px] text-[var(--text-muted)]">{{ format_datetime(t.deleted_at, "%d/%m/%Y %H:%M", "-") }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <div class="admin-table-actions">
+                                <a href="{{ url_for('superadmin_tenants.view_tenant', tenant_id=t.id) }}"
+                                    class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                                    Visao 360
+                                </a>
+                                {% if t.deleted_at %}
+                                <span class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-muted)]">
+                                    Usuários
+                                </span>
+                                {% else %}
+                                <a href="{{ url_for('superadmin_users.list_users', scope='tenant', tenant=t.id) }}"
+                                    class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                                    Usuários
+                                </a>
+                                {% endif %}
+                                <a href="{{ url_for('superadmin_billing.list_billing', q=t.name) }}"
+                                    class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                                    Cobrança
+                                </a>
+                                {% if t.deleted_at %}
+                                <span class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-muted)]">
+                                    Editar
+                                </span>
+                                {% else %}
+                                <a href="{{ url_for('superadmin_tenants.edit_tenant', tenant_id=t.id) }}"
+                                    class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                                    Editar
+                                </a>
+                                {% endif %}
+                                {% if not t.deleted_at %}
+                                <form method="POST" action="{{ url_for('superadmin_tenants.toggle_tenant_active', tenant_id=t.id) }}" class="inline"
+                                    data-confirm="{{ 'Desativar' if t.is_active else 'Ativar' }} o cliente {{ t.name }} agora?"
+                                    onsubmit="return confirm(this.dataset.confirm);">
+                                    {% include 'partials/csrf.html' %}
+                                    <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
+                                    <button type="submit"
+                                        class="rounded-lg border border-[var(--card-border)] px-2.5 py-1.5 text-xs font-medium {% if t.is_active %}text-amber-300 hover:bg-amber-500/10{% else %}text-emerald-300 hover:bg-emerald-500/10{% endif %}">
+                                        {{ 'Desativar' if t.is_active else 'Ativar' }}
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('superadmin_tenants.delete_tenant', tenant_id=t.id) }}" class="inline"
+                                    data-confirm="Enviar o cliente {{ t.name }} para a lixeira agora?"
+                                    onsubmit="return confirm(this.dataset.confirm);">
+                                    {% include 'partials/csrf.html' %}
+                                    <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
+                                    <button type="submit" {% if t.protected_system_tenant %}disabled{% endif %}
+                                        class="rounded-lg border border-rose-500/30 px-2.5 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10">
+                                        Lixeira
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form method="POST" action="{{ url_for('superadmin_tenants.restore_tenant', tenant_id=t.id) }}" class="inline"
+                                    data-confirm="Restaurar o cliente {{ t.name }} agora?"
+                                    onsubmit="return confirm(this.dataset.confirm);">
+                                    {% include 'partials/csrf.html' %}
+                                    <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
+                                    <button type="submit"
+                                        class="rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/10">
+                                        Restaurar
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('superadmin_tenants.purge_tenant', tenant_id=t.id) }}" class="inline"
+                                    data-confirm="Apagar permanentemente o cliente {{ t.name }}? Esta ação remove usuários, dispositivos, faturamento e configurações vinculadas."
+                                    onsubmit="return confirm(this.dataset.confirm);">
+                                    {% include 'partials/csrf.html' %}
+                                    <input type="hidden" name="return_url" value="{{ request.full_path.rstrip('?') }}">
+                                    <button type="submit" {% if t.protected_system_tenant %}disabled{% endif %}
+                                        class="rounded-lg border border-rose-500/30 px-2.5 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10">
+                                        Apagar definitivo
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-10 text-center text-[var(--text-muted)]">Nenhum cliente encontrado com esses filtros.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% if total_pages > 1 %}
+    <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--text-muted)]">
+        <p>Página {{ page }} de {{ total_pages }} ({{ total }} itens)</p>
+        <div class="flex items-center gap-2">
+            {% if page > 1 %}
+            <a href="{{ url_for('superadmin_tenants.list_tenants', page=page-1, q=q, status=status, subscription=subscription, ops=ops, sort=sort, per_page=per_page) }}"
+                class="rounded-lg border border-[var(--card-border)] px-3 py-1.5 hover:bg-[var(--line-color)]">Anterior</a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="{{ url_for('superadmin_tenants.list_tenants', page=page+1, q=q, status=status, subscription=subscription, ops=ops, sort=sort, per_page=per_page) }}"
+                class="rounded-lg border border-[var(--card-border)] px-3 py-1.5 hover:bg-[var(--line-color)]">Próxima</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

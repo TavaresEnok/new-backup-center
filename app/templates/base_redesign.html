@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Backup Center{% endblock %}</title>
+
+  {# ---- head_pre: carregado ANTES do redesign.css. Telas que reutilizam componentes
+         antigos baseados em Tailwind (ex.: modal de backup ao vivo) sobrescrevem este
+         bloco para injetar output.css + mapear as variaveis de tema legadas. ---- #}
+  {% block head_pre %}{% endblock %}
+
+  {# ---- Design system CSS (reskin completo, independente do Tailwind) ---- #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/redesign.css') }}?v=20260608-filters">
+
+  {# ---- Icons & charts ---- #}
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  {# ---- Alpine (preserva interacoes herdadas das telas originais) ---- #}
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  {# ---- Per-page extra head ---- #}
+  {% block head %}{% endblock %}
+
+  {# ---- Prevent flash of wrong theme ---- #}
+  <script>document.documentElement.classList.toggle('dark', localStorage.getItem('bc-theme')==='dark')</script>
+  <style>[x-cloak]{display:none !important}</style>
+</head>
+<body class="app">
+
+{% set slug = tenant.slug if tenant is defined and tenant else (tenant_slug if tenant_slug is defined else '') %}
+
+{# ======================================================
+   SIDEBAR
+   ====================================================== #}
+{% set ep = request.endpoint %}
+{% set is_dev    = ep and 'device'    in ep %}
+{% set is_bkp    = ep and 'backup'    in ep %}
+{% set is_grp    = ep and ('group' in ep or 'operation' in ep) %}
+{% set is_sched  = ep and 'schedule'  in ep %}
+{% set is_act    = ep and 'activity'  in ep %}
+{% set is_user   = ep and 'user'      in ep %}
+{% set is_cfg    = ep and 'setting'   in ep %}
+{% set is_cmp    = ep and 'compare'   in ep %}
+{% set is_rpt    = ep and 'report'    in ep %}
+{% set is_billing = ep and 'billing'  in ep %}
+{% set top_search_action = url_for('tenant_devices.list_devices', tenant_slug=slug) if slug else '#' %}
+{% set top_search_placeholder = 'Buscar dispositivos por nome ou IP...' %}
+{% set hide_top_search = (
+  ep in [
+    'tenant_devices.list_devices',
+    'tenant_operations.index',
+    'tenant_schedules.list_schedules',
+    'tenant_users.list_users',
+    'tenant_activity.list_activity',
+  ]
+) %}
+{% if ep == 'tenant_users.list_users' %}
+  {% set top_search_action = url_for('tenant_users.list_users', tenant_slug=slug) %}
+  {% set top_search_placeholder = 'Buscar usuarios por nome ou e-mail...' %}
+{% elif ep == 'tenant_operations.index' %}
+  {% set top_search_action = url_for('tenant_operations.index', tenant_slug=slug) %}
+  {% set top_search_placeholder = 'Buscar grupo, provedor ou conexao...' %}
+{% endif %}
+
+{% block sidebar %}<aside class="rail" id="rail">
+  <div class="rail-head">
+    <a href="{{ url_for('tenant.dashboard', tenant_slug=slug) }}" class="brand-mark" title="Backup Center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><path d="M12 7v5l3 2"/><path d="M21 4v5h-5"/></svg>
+    </a>
+    <div class="brand-name">Backup Center<small>{{ tenant.name if tenant is defined and tenant else '' }}</small></div>
+  </div>
+
+  {# status chip — dinâmico (OK verde / atenção âmbar) #}
+  <div class="rail-status" id="railStatus">
+    <span class="rs-ic" id="railStatusIc"><i data-lucide="check"></i></span>
+    <div>
+      <div class="rs-t" id="railStatusTitle">Sistema ativo</div>
+      <div class="rs-s" id="railStatusSub">{{ tenant.name if tenant is defined and tenant else '' }}</div>
+    </div>
+  </div>
+
+  <nav class="nav sc">
+    <div class="nav-group-label">Operação</div>
+
+    <a href="{{ url_for('tenant.dashboard', tenant_slug=slug) }}"
+       class="nav-link {% if ep == 'tenant.dashboard' %}on{% endif %}">
+      <i data-lucide="sun"></i><span class="nav-label">Visão geral</span>
+    </a>
+
+    <a href="{{ url_for('tenant_operations.index', tenant_slug=slug) }}"
+       class="nav-link {% if is_grp %}on{% endif %}">
+      <i data-lucide="layers"></i><span class="nav-label">Grupos</span>
+    </a>
+
+    <div data-grp>
+      <a class="nav-link {% if is_dev or is_bkp or is_cmp %}on{% endif %}" data-tg>
+        <i data-lucide="server"></i>
+        <span class="nav-label">Dispositivos</span>
+        <i data-lucide="chevron-down" class="nav-caret" {% if is_dev or is_bkp or is_cmp %}style="transform:rotate(180deg)"{% endif %}></i>
+      </a>
+      <div class="nav-sub" {% if not (is_dev or is_bkp or is_cmp) %}style="display:none"{% endif %}>
+        <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=slug) }}"
+           class="{% if is_dev and 'list' in ep %}on{% endif %}">Todos os dispositivos</a>
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=slug) }}"
+           class="{% if is_bkp %}on{% endif %}">Histórico de backups</a>
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=slug) }}?status=failed"
+           class="">Pendências</a>
+        <a href="{{ url_for('tenant_compare.select_device', tenant_slug=slug) }}"
+           class="{% if is_cmp %}on{% endif %}">Comparar versões</a>
+      </div>
+    </div>
+
+    <div class="nav-group-label">Acompanhamento</div>
+
+    <a href="{{ url_for('tenant_activity.list_activity', tenant_slug=slug) }}"
+       class="nav-link {% if is_act %}on{% endif %}">
+      <i data-lucide="radio"></i><span class="nav-label">Tempo real</span>
+    </a>
+
+    <div data-grp>
+      <a class="nav-link {% if is_rpt %}on{% endif %}" data-tg>
+        <i data-lucide="book-open"></i>
+        <span class="nav-label">Relatórios</span>
+        <i data-lucide="chevron-down" class="nav-caret" {% if is_rpt %}style="transform:rotate(180deg)"{% endif %}></i>
+      </a>
+      <div class="nav-sub" {% if not is_rpt %}style="display:none"{% endif %}>
+        <a href="{{ url_for('tenant_reports.daily', tenant_slug=slug) }}"
+           class="{% if ep == 'tenant_reports.daily' %}on{% endif %}">Diário</a>
+        <a href="{{ url_for('tenant_reports.weekly', tenant_slug=slug) }}"
+           class="{% if ep == 'tenant_reports.weekly' %}on{% endif %}">Semanal</a>
+        <a href="{{ url_for('tenant_reports.monthly', tenant_slug=slug) }}"
+           class="{% if ep == 'tenant_reports.monthly' %}on{% endif %}">Mensal</a>
+      </div>
+    </div>
+
+    <a href="{{ url_for('tenant_schedules.list_schedules', tenant_slug=slug) }}"
+       class="nav-link {% if is_sched %}on{% endif %}">
+      <i data-lucide="calendar"></i><span class="nav-label">Agendamentos</span>
+    </a>
+
+    <div class="nav-group-label">Conta</div>
+
+    <a href="{{ url_for('tenant_users.list_users', tenant_slug=slug) }}"
+       class="nav-link {% if is_user %}on{% endif %}">
+      <i data-lucide="users"></i><span class="nav-label">Equipe</span>
+    </a>
+
+    <a href="{{ url_for('tenant_settings.general_settings', tenant_slug=slug) }}"
+       class="nav-link {% if is_cfg %}on{% endif %}">
+      <i data-lucide="settings"></i><span class="nav-label">Configurações</span>
+    </a>
+
+    <a href="{{ url_for('billing.dashboard', tenant_slug=slug) }}"
+       class="nav-link {% if is_billing %}on{% endif %}">
+      <i data-lucide="sparkles"></i><span class="nav-label">Assinatura</span>
+      <span class="nav-badge">PRO</span>
+    </a>
+  </nav>
+
+  <div class="rail-foot">
+    <button class="rail-toggle" id="railMin" type="button">
+      <i data-lucide="panel-left-close"></i><span>Recolher</span>
+    </button>
+  </div>
+</aside>
+{% endblock %}
+
+<div class="scrim" id="scrim"></div>
+
+<main class="main">
+  <header class="top">
+    <button class="ibtn" id="mobBtn" type="button" style="display:none"><i data-lucide="menu"></i></button>
+    <div class="crumbs">
+      <i data-lucide="home"></i><i data-lucide="chevron-right"></i>
+      {% block breadcrumb %}<b>Visão geral</b>{% endblock %}
+    </div>
+    <div class="spacer"></div>
+    {% if not hide_top_search %}
+    <form class="search" action="{{ top_search_action }}" method="GET">
+      <button type="submit" class="ibtn" style="width:18px;height:18px;border-radius:0;background:transparent;padding:0;flex:0 0 auto" aria-label="Buscar">
+        <i data-lucide="search"></i>
+      </button>
+      {% if ep == 'tenant_users.list_users' and request.args.get('status') %}
+      <input type="hidden" name="status" value="{{ request.args.get('status') }}">
+      {% endif %}
+      {% if ep == 'tenant_devices.list_devices' and request.args.get('group_id') %}
+      <input type="hidden" name="group_id" value="{{ request.args.get('group_id') }}">
+      {% endif %}
+      {% if ep == 'tenant_operations.index' and request.args.get('group_filter') %}
+      <input type="hidden" name="group_filter" value="{{ request.args.get('group_filter') }}">
+      {% endif %}
+      <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="{{ top_search_placeholder }}" aria-label="{{ top_search_placeholder }}">
+    </form>
+    {% endif %}
+    <button class="ibtn" id="themeBtn" type="button" title="Alternar tema"><i data-lucide="sun" id="themeIc"></i></button>
+    <button class="ibtn" type="button" title="Notificações"><i data-lucide="bell"></i></button>
+    <div class="who">
+      <div class="who-meta">
+        <b>{{ session.get('user_name', 'Usuário') }}</b>
+        <span>{{ session.get('user_role', 'Operador')|replace('tenant_','') }}</span>
+      </div>
+      <div class="who-av">{{ session.get('user_name', 'U')[:1]|upper }}</div>
+    </div>
+  </header>
+
+  {# ---- Flash messages ---- #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div style="padding:10px 44px 0">
+    {% for cat, msg in messages %}
+    <div role="alert" style="padding:12px 18px;border-radius:12px;margin-bottom:8px;font-size:13.5px;font-weight:500;
+         background:{% if cat=='error' %}var(--crit-soft){% elif cat=='success' %}var(--good-soft){% elif cat=='warning' %}var(--care-soft){% else %}var(--pine-soft){% endif %};
+         color:{% if cat=='error' %}var(--crit){% elif cat=='success' %}var(--good){% elif cat=='warning' %}var(--care){% else %}var(--pine){% endif %};">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  {# ---- Alerta de faturamento (preservado do layout original) ---- #}
+  {% if tenant_billing_alert %}
+  <div style="padding:0 44px;margin-top:10px">
+    <div style="padding:14px 18px;border-radius:12px;background:var(--care-soft);color:var(--care);font-size:13.5px">
+      <strong>{{ tenant_billing_alert.message }}</strong>
+      <a href="{{ tenant_billing_url }}" style="display:inline-block;margin-left:8px;font-weight:600;text-decoration:underline">Ir para faturamento</a>
+    </div>
+  </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<script>
+  // ---- Theme ----
+  (function(){
+    var dark = localStorage.getItem('bc-theme')==='dark';
+    document.documentElement.classList.toggle('dark', dark);
+    var ic = document.getElementById('themeIc');
+    if(ic) ic.setAttribute('data-lucide', dark ? 'moon' : 'sun');
+    var btn = document.getElementById('themeBtn');
+    if(btn) btn.addEventListener('click', function(){
+      var now = !document.documentElement.classList.contains('dark');
+      document.documentElement.classList.toggle('dark', now);
+      localStorage.setItem('bc-theme', now ? 'dark' : 'light');
+      if(ic) ic.setAttribute('data-lucide', now ? 'moon' : 'sun');
+      if(window.lucide) lucide.createIcons();
+    });
+  })();
+
+  // ---- Sidebar collapse ----
+  (function(){
+    var rail = document.getElementById('rail');
+    if(!rail) return;
+    if(localStorage.getItem('bc-min')==='1') rail.classList.add('min');
+    var rm = document.getElementById('railMin');
+    if(rm) rm.addEventListener('click', function(){
+      rail.classList.toggle('min');
+      localStorage.setItem('bc-min', rail.classList.contains('min') ? '1' : '0');
+    });
+    rail.querySelectorAll('[data-tg]').forEach(function(t){
+      t.addEventListener('click', function(){
+        var sub = t.parentElement.querySelector('.nav-sub');
+        var car = t.querySelector('.nav-caret');
+        if(!sub) return;
+        var open = sub.style.display !== 'none';
+        sub.style.display = open ? 'none' : 'flex';
+        if(car) car.style.transform = open ? '' : 'rotate(180deg)';
+      });
+    });
+    var mob = document.getElementById('mobBtn');
+    var scrim = document.getElementById('scrim');
+    function syncMob(){ if(mob) mob.style.display = window.innerWidth<=1024 ? 'grid' : 'none'; }
+    syncMob(); window.addEventListener('resize', syncMob);
+    if(mob) mob.addEventListener('click', function(){ rail.classList.toggle('open'); if(scrim) scrim.classList.toggle('show'); });
+    if(scrim) scrim.addEventListener('click', function(){ rail.classList.remove('open'); scrim.classList.remove('show'); });
+  })();
+
+  // ---- Confirmacao de acoes destrutivas (preservado do layout original) ----
+  window.__confirmDangerousForm = function (formEl) {
+    if (!formEl) return true;
+    if (formEl.dataset.confirmed === '1') return true;
+    var message = formEl.dataset.confirm;
+    if (!message) return true;
+    var ok = window.confirm(message);
+    if (!ok) return false;
+    formEl.dataset.confirmed = '1';
+    return true;
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    if(window.lucide) lucide.createIcons();
+
+    // confirmacao em submits com data-confirm
+    document.addEventListener('submit', function (event) {
+      var form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (!form.dataset.confirm) return;
+      if (!window.__confirmDangerousForm(form)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }, true);
+
+    // auto-dismiss flash
+    document.querySelectorAll('[role="alert"]').forEach(function(alert, index){
+      setTimeout(function(){
+        alert.style.transition = 'opacity .5s ease, transform .5s ease';
+        alert.style.opacity = '0';
+        alert.style.transform = 'translateY(-10px)';
+        setTimeout(function(){ alert.remove(); }, 500);
+      }, 6000 + (index * 400));
+    });
+
+    // ---- Rail status chip dinâmico (sistema_2) ----
+    // Lê failed_24h do DOM (dashboard injeta), ou tenta a API se disponível.
+    // Fallback seguro: "Sistema ativo".
+    (function(){
+      var title = document.getElementById('railStatusTitle');
+      var sub = document.getElementById('railStatusSub');
+      var ic = document.getElementById('railStatusIc');
+      if (!title || !sub) return;
+      var fail24 = parseInt(document.getElementById('rail-fail-24h') && document.getElementById('rail-fail-24h').value, 10) || 0;
+      var ok = parseInt(document.getElementById('rail-ok-count') && document.getElementById('rail-ok-count').value, 10) || 0;
+      var total = parseInt(document.getElementById('rail-total') && document.getElementById('rail-total').value, 10) || 0;
+      if (total > 0) {
+        if (fail24 > 0) {
+          title.textContent = fail24 + ' falha' + (fail24 > 1 ? 's' : '') + ' em 24h';
+          sub.textContent = ok + ' de ' + total + ' protegidos';
+          if (ic) { ic.style.background = 'var(--care-soft)'; ic.style.color = 'var(--care)'; ic.innerHTML = '<i data-lucide="alert-triangle"></i>'; }
+        } else {
+          title.textContent = 'Tudo tranquilo';
+          sub.textContent = ok + ' de ' + total + ' protegidos';
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+    })();
+
+    {% block page_js %}{% endblock %}
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,1066 @@
+<!-- ═══════════════════════════════════════════════
+     Backup ao vivo — Modal principal
+     Usado para backup individual e em massa.
+     Disparado por botões com [data-run-backup-live].
+     CSS: Tailwind (output.css) é carregado sob demanda
+     para estilizar o modal sem afetar a página pai.
+════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}?v=modal-only" id="backup-modal-css">
+<style>:root,html.dark{--card-bg:var(--surface,#1e293b);--card-border:var(--line,#334155);--text-main:var(--ink,#f1f5f9);--text-muted:var(--ink-3,#94a3b8);--bg-app:var(--bg,#0f172a)}</style>
+<div id="live-backup-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+
+    <!-- Container principal -->
+    <div class="w-full max-w-5xl bg-[var(--card-bg)] border border-[var(--card-border)] rounded-xl shadow-2xl flex flex-col overflow-hidden" style="max-height: 95vh;">
+
+        <!-- ═══ CABEÇALHO ═══ -->
+        <div class="px-6 py-4 border-b border-[var(--card-border)] flex flex-col md:flex-row md:items-start justify-between gap-4 flex-shrink-0">
+            <div class="flex-1 min-w-0">
+                <!-- Badge de status + ID da task -->
+                <div class="flex items-center gap-3 mb-1.5 flex-wrap">
+                    <span id="live-backup-status-chip"
+                        class="px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5 flex-shrink-0"
+                        role="status">
+                        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                        Em fila
+                    </span>
+                    <span class="text-[var(--text-muted)] text-[11px] font-mono tracking-wide min-w-0">
+                        ID: <span id="live-backup-task-id" class="text-[var(--text-main)] font-medium select-all break-all">--</span>
+                    </span>
+                </div>
+                <!-- Título da operação -->
+                <h3 id="live-backup-title" class="text-xl font-semibold text-white truncate">Backup ao vivo</h3>
+                <!-- Tempo decorrido + última atualização -->
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
+                    <p class="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+                        <i data-lucide="clock" class="w-3.5 h-3.5 text-[var(--text-muted)]"></i>
+                        Decorrido: <span id="live-elapsed-time" class="text-[var(--text-main)] ml-1">00:00:00</span>
+                    </p>
+                    <div class="w-1 h-1 rounded-full bg-slate-700 hidden sm:block"></div>
+                    <p class="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+                        <i data-lucide="activity" class="w-3.5 h-3.5 text-[var(--text-muted)]"></i>
+                        Atualização: <span id="live-last-update" class="text-[var(--text-main)] ml-1">--</span>
+                    </p>
+                </div>
+            </div>
+            <!-- Botões de ação do cabeçalho -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button id="live-backup-stop" type="button"
+                    class="hidden inline-flex items-center gap-1.5 rounded-lg border border-red-700 bg-red-900/20 px-3 py-1.5 text-sm font-medium text-red-300 hover:bg-red-900/40 disabled:cursor-not-allowed disabled:opacity-60 transition-colors">
+                    <i data-lucide="square" class="h-4 w-4"></i>
+                    Parar lote
+                </button>
+                <button id="live-backup-close" type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--card-border)] px-3 py-1.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--card-bg)] hover:text-white transition-colors">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                    Fechar
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══ CORPO ═══ -->
+        <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
+
+            <!-- Seção de métricas + progresso -->
+            <div class="p-5 space-y-4 flex-shrink-0">
+
+                <!-- Grid de métricas (apenas para operações em massa) -->
+                <div id="live-backup-bulk-panel" class="hidden grid-cols-3 md:grid-cols-6 gap-px bg-[var(--card-bg)] border border-[var(--card-border)] rounded-lg overflow-hidden">
+                    <div class="bg-[var(--card-bg)] p-3 flex flex-col">
+                        <span class="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1 font-semibold">Planejados</span>
+                        <span id="live-metric-total" class="text-2xl font-semibold text-white">0</span>
+                    </div>
+                    <div class="bg-[var(--card-bg)] p-3 flex flex-col border-b-2 border-emerald-500/50">
+                        <span class="text-[10px] text-emerald-400 uppercase tracking-wider mb-1 font-semibold">Sucesso</span>
+                        <span id="live-metric-success" class="text-2xl font-semibold text-emerald-400">0</span>
+                    </div>
+                    <div class="bg-[var(--card-bg)] p-3 flex flex-col border-b-2 border-rose-500/50">
+                        <span class="text-[10px] text-rose-400 uppercase tracking-wider mb-1 font-semibold">Falha</span>
+                        <span id="live-metric-failed" class="text-2xl font-semibold text-rose-400">0</span>
+                    </div>
+                    <div id="live-metric-running-cell" class="bg-[var(--card-bg)] p-3 flex flex-col transition-colors">
+                        <span class="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1 font-semibold flex items-center gap-1.5">
+                            Grupos ativos
+                            <span id="live-stuck-badge" class="hidden text-amber-500 bg-amber-500/10 px-1 rounded font-bold uppercase tracking-tight text-[9px] animate-pulse">Travado</span>
+                        </span>
+                        <span id="live-metric-running" class="text-2xl font-semibold text-indigo-400">0</span>
+                        <span id="live-metric-running-detail" class="mt-1 text-[11px] text-[var(--text-muted)]">0 dispositivos nestes grupos</span>
+                    </div>
+                    <div class="bg-[var(--card-bg)] p-3 flex flex-col">
+                        <span class="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1 font-semibold">Pendentes</span>
+                        <span id="live-metric-queued" class="text-2xl font-semibold text-[var(--text-main)]">0</span>
+                        <span id="live-metric-queued-detail" class="mt-1 text-[11px] text-[var(--text-muted)]">0 grupos aguardando worker</span>
+                    </div>
+                    <div class="bg-[var(--card-bg)] p-3 flex flex-col">
+                        <span class="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1 font-semibold">ETA</span>
+                        <span id="live-metric-eta" class="text-2xl font-semibold text-[var(--text-muted)]">--:--</span>
+                    </div>
+                </div>
+
+                <!-- Painel de diagnóstico acionável (falhas em massa) -->
+                <div id="live-diagnostic-panel" class="hidden bg-rose-950/20 border border-rose-900/50 rounded-lg p-4 flex-col sm:flex-row items-start sm:items-center justify-between gap-4" role="alert">
+                    <div class="flex items-start gap-3 flex-1 min-w-0">
+                        <i data-lucide="alert-triangle" class="text-rose-500 w-5 h-5 shrink-0 mt-0.5"></i>
+                        <div class="min-w-0">
+                            <h4 class="text-rose-400 font-semibold text-sm">
+                                Causa Dominante: <span id="live-diagnostic-issue">--</span> (<span id="live-diagnostic-affected">0</span> disp.)
+                            </h4>
+                            <p id="live-diagnostic-recommendation" class="text-rose-400/80 text-xs mt-0.5 max-w-2xl">--</p>
+                        </div>
+                    </div>
+                    <button id="live-diagnostic-retry" type="button"
+                        class="shrink-0 flex items-center gap-2 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded text-sm font-medium transition-colors">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        Retestar Falhas
+                    </button>
+                </div>
+
+                <div id="live-followup-panel" class="hidden bg-sky-950/20 border border-sky-900/50 rounded-lg p-3 items-start gap-3" role="status">
+                    <i data-lucide="clock-3" class="text-sky-400 w-4 h-4 shrink-0 mt-0.5"></i>
+                    <div class="min-w-0">
+                        <div id="live-followup-title" class="text-sky-300 font-semibold text-xs">Retry automático</div>
+                        <div id="live-followup-text" class="text-sky-300/80 text-xs mt-0.5">--</div>
+                    </div>
+                </div>
+
+                <!-- Barra de progresso segmentada (sucesso / falha) -->
+                <div class="flex items-center gap-4">
+                    <div class="flex-1 h-1.5 bg-[var(--card-bg)] rounded-full overflow-hidden flex">
+                        <div id="live-backup-progress-bar" class="h-full bg-emerald-500 transition-all duration-500" style="width: 0%"></div>
+                        <div id="live-backup-progress-failed-bar" class="h-full bg-rose-500 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <span id="live-backup-progress-label" class="text-[11px] font-mono font-medium text-[var(--text-muted)] uppercase whitespace-nowrap">0% Concluído</span>
+                </div>
+                <p id="live-backup-status-message" class="text-xs text-[var(--text-muted)] -mt-1">Aguardando inicio no worker...</p>
+            </div>
+
+            <!-- ═══ TERMINAL DE LOGS ═══ -->
+            <div class="flex flex-col flex-1 min-h-0 bg-[var(--card-bg)] border-t border-[var(--card-border)]">
+
+                <!-- Barra de controles dos logs -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between px-4 py-2.5 border-b border-[var(--card-border)] bg-[var(--card-bg)] gap-3 flex-shrink-0">
+                    <!-- Filtros por nível -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                        <i data-lucide="filter" class="w-3.5 h-3.5 text-[var(--text-muted)] mr-1 shrink-0"></i>
+                        <button data-log-filter="ALL"
+                            class="log-filter-btn px-2.5 py-1 text-[11px] font-semibold rounded transition-colors whitespace-nowrap bg-slate-700 text-white">
+                            Todos (<span id="log-count-all">0</span>)
+                        </button>
+                        <button data-log-filter="INFO"
+                            class="log-filter-btn px-2.5 py-1 text-[11px] font-semibold rounded transition-colors whitespace-nowrap text-[var(--text-muted)] hover:bg-[var(--card-bg)]">
+                            Info (<span id="log-count-info">0</span>)
+                        </button>
+                        <button data-log-filter="WARNING"
+                            class="log-filter-btn px-2.5 py-1 text-[11px] font-semibold rounded transition-colors whitespace-nowrap text-[var(--text-muted)] hover:bg-[var(--card-bg)]">
+                            Warn (<span id="log-count-warn">0</span>)
+                        </button>
+                        <button data-log-filter="ERROR"
+                            class="log-filter-btn px-2.5 py-1 text-[11px] font-semibold rounded transition-colors whitespace-nowrap text-[var(--text-muted)] hover:bg-[var(--card-bg)]">
+                            Error (<span id="log-count-err">0</span>)
+                        </button>
+                    </div>
+                    <!-- Ações de log -->
+                    <div class="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+                        <button id="live-log-copy-errors" type="button"
+                            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded transition-colors border text-[var(--text-main)] hover:text-white hover:bg-[var(--card-bg)] border-[var(--card-border)]">
+                            <i data-lucide="alert-triangle" class="w-3 h-3"></i>
+                            Copiar Erros
+                        </button>
+                        <button id="live-log-copy-all" type="button"
+                            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded transition-colors border text-[var(--text-main)] hover:text-white hover:bg-[var(--card-bg)] border-[var(--card-border)]">
+                            <i data-lucide="copy" class="w-3 h-3"></i>
+                            Copiar Todos
+                        </button>
+                        <div class="w-px h-4 bg-slate-700 mx-1 hidden sm:block"></div>
+                        <button id="live-backup-clear" type="button"
+                            class="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                            Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Área de rolagem dos logs -->
+                <div id="live-backup-log-scroll-area" class="flex-1 overflow-y-auto overflow-x-auto px-4 py-2 font-mono text-[12px] leading-relaxed">
+                    <div class="min-w-[600px] pb-4">
+                        <!-- Cabeçalho das colunas (sticky) -->
+                        <div class="grid grid-cols-[75px_75px_155px_1fr] gap-3 px-2 py-1.5 text-[var(--text-muted)] font-semibold text-[10px] uppercase tracking-widest border-b border-[var(--card-border)]/80 sticky top-0 bg-[var(--card-bg)] z-10">
+                            <div>Tempo</div>
+                            <div>Nível</div>
+                            <div>Contexto</div>
+                            <div>Mensagem</div>
+                        </div>
+                        <div id="live-backup-log-stream" class="space-y-0.5 mt-0.5"></div>
+                    </div>
+                    <!-- Estado vazio -->
+                    <div id="live-log-empty" class="hidden text-slate-600 italic flex h-32 items-center justify-center font-sans text-sm">
+                        Nenhum log a exibir.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast: erro ao copiar -->
+<div id="live-copy-error-toast" class="hidden fixed top-6 left-1/2 -translate-x-1/2 z-[10000] bg-rose-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium text-sm pointer-events-none" role="alert">
+    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+    Não foi possível copiar para a área de transferência.
+</div>
+
+<!-- Widget flutuante (backup em massa minimizado) -->
+<div id="live-bulk-control" class="fixed bottom-4 right-4 z-[9998] hidden">
+    <div class="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/95 p-3 shadow-xl backdrop-blur">
+        <p class="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Backup em massa</p>
+        <p id="live-bulk-control-task" class="mt-1 max-w-[280px] truncate font-mono text-[11px] text-[var(--text-main)]">-</p>
+        <div class="mt-2 flex items-center gap-2">
+            <button id="live-bulk-control-open" type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-[var(--card-border)] px-2.5 py-1.5 text-xs text-[var(--text-main)] hover:bg-[var(--card-bg)] transition-colors">
+                <i data-lucide="activity" class="h-3.5 w-3.5"></i>
+                Monitorar
+            </button>
+            <button id="live-bulk-control-stop" type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-red-700 bg-red-900/20 px-2.5 py-1.5 text-xs text-red-300 hover:bg-red-900/40 disabled:cursor-not-allowed disabled:opacity-60 transition-colors">
+                <i data-lucide="square" class="h-3.5 w-3.5"></i>
+                Parar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        if (window.__backupLiveModalInitialized) return;
+        window.__backupLiveModalInitialized = true;
+
+        // ── Referências DOM ──────────────────────────────────────
+        const modal             = document.getElementById('live-backup-modal');
+        const closeBtn          = document.getElementById('live-backup-close');
+        const stopBtn           = document.getElementById('live-backup-stop');
+        const clearBtn          = document.getElementById('live-backup-clear');
+        const titleEl           = document.getElementById('live-backup-title');
+        const taskEl            = document.getElementById('live-backup-task-id');
+        const statusChip        = document.getElementById('live-backup-status-chip');
+        const statusMsg         = document.getElementById('live-backup-status-message');
+        const progressBar       = document.getElementById('live-backup-progress-bar');
+        const progressFailedBar = document.getElementById('live-backup-progress-failed-bar');
+        const progressLabel     = document.getElementById('live-backup-progress-label');
+        const logStream         = document.getElementById('live-backup-log-stream');
+        const logScrollArea     = document.getElementById('live-backup-log-scroll-area');
+        const logEmpty          = document.getElementById('live-log-empty');
+        const bulkPanel         = document.getElementById('live-backup-bulk-panel');
+        const metricTotal       = document.getElementById('live-metric-total');
+        const metricSuccess     = document.getElementById('live-metric-success');
+        const metricFailed      = document.getElementById('live-metric-failed');
+        const metricRunning     = document.getElementById('live-metric-running');
+        const metricRunningDetail = document.getElementById('live-metric-running-detail');
+        const metricQueued      = document.getElementById('live-metric-queued');
+        const metricQueuedDetail = document.getElementById('live-metric-queued-detail');
+        const metricEta         = document.getElementById('live-metric-eta');
+        const runningCell       = document.getElementById('live-metric-running-cell');
+        const stuckBadge        = document.getElementById('live-stuck-badge');
+        const diagnosticPanel   = document.getElementById('live-diagnostic-panel');
+        const diagnosticIssue   = document.getElementById('live-diagnostic-issue');
+        const diagnosticAffected= document.getElementById('live-diagnostic-affected');
+        const diagnosticRec     = document.getElementById('live-diagnostic-recommendation');
+        const diagRetryBtn      = document.getElementById('live-diagnostic-retry');
+        const followupPanel     = document.getElementById('live-followup-panel');
+        const followupTitle     = document.getElementById('live-followup-title');
+        const followupText      = document.getElementById('live-followup-text');
+        const elapsedTimeEl     = document.getElementById('live-elapsed-time');
+        const lastUpdateEl      = document.getElementById('live-last-update');
+        const copyAllBtn        = document.getElementById('live-log-copy-all');
+        const copyErrorsBtn     = document.getElementById('live-log-copy-errors');
+        const copyToast         = document.getElementById('live-copy-error-toast');
+        const bulkControl       = document.getElementById('live-bulk-control');
+        const bulkControlTask   = document.getElementById('live-bulk-control-task');
+        const bulkControlOpenBtn= document.getElementById('live-bulk-control-open');
+        const bulkControlStopBtn= document.getElementById('live-bulk-control-stop');
+        const logCountAll       = document.getElementById('log-count-all');
+        const logCountInfo      = document.getElementById('log-count-info');
+        const logCountWarn      = document.getElementById('log-count-warn');
+        const logCountErr       = document.getElementById('log-count-err');
+        const csrfTokenInput    = document.querySelector('input[name="_csrf_token"]');
+
+        // ── Estado ───────────────────────────────────────────────
+        let pollTimer         = null;
+        let visibilityPollHandler = null;
+        let elapsedTimer      = null;
+        let lastUpdateTimer   = null;
+        let currentTaskId     = null;
+        let currentCancelUrl  = null;
+        let currentIsBulk     = false;
+        let currentStatusUrl  = null;
+        let currentLogsUrl    = null;
+        let currentDeviceName = null;
+        let currentCompleted  = false;
+        let lastLogSeq        = 0;
+        let lastProgressValue = 0;
+        let pollInFlight      = false;
+        let shouldRefreshOnClose = false;
+        let startTimestamp    = null;
+        let lastPollTimestamp = null;
+        let elapsedSecs       = 0;
+        let currentLogFilter  = 'ALL';
+        let logCounts         = { ALL: 0, INFO: 0, WARNING: 0, ERROR: 0 };
+        let allLogEntries     = []; // Para copiar
+        const STORAGE_KEY     = 'backup_live_bulk_control_v1';
+
+        // ── Diagnóstico por categoria de falha ───────────────────
+        const failureInfo = {
+            auth:         { issue: 'Falha de Autenticação',   rec: 'Verifique se as credenciais (Jump Host, TACACS/RADIUS) estão corretas e não expiraram.' },
+            timeout:      { issue: 'Timeout de Conexão',      rec: 'Os dispositivos não respondem no tempo esperado. Verifique a latência e a disponibilidade da rede.' },
+            port_refused: { issue: 'Porta Recusada',          rec: 'A porta SSH/Telnet está fechada ou bloqueada por firewall. Verifique as regras de acesso remoto.' },
+            vpn:          { issue: 'Falha de VPN',            rec: 'O túnel VPN não foi estabelecido. Verifique as credenciais e a disponibilidade do servidor VPN.' },
+            no_ping:      { issue: 'Dispositivo Inacessível', rec: 'Os dispositivos não respondem a ping. Verifique se estão online e se há rota até eles.' },
+            connection:   { issue: 'Erro de Conexão',         rec: 'Falha ao estabelecer a sessão SSH/Telnet. Verifique as configurações de rede e credenciais.' },
+            script:       { issue: 'Erro de Script',          rec: 'O script de backup retornou erro. Verifique se o tipo de dispositivo está configurado corretamente.' },
+            unknown:      { issue: 'Erro Desconhecido',       rec: 'Consulte os logs detalhados abaixo para identificar a causa da falha.' },
+        };
+
+        // ── Configurações do badge de status ─────────────────────
+        const chipConfigs = {
+            queued:   { cls: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',   icon: 'clock',       label: 'Em fila'       },
+            running:  { cls: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',       icon: 'activity',    label: 'Executando'    },
+            success:  { cls: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30', icon: 'check-circle', label: 'Concluído'   },
+            failed:   { cls: 'bg-rose-500/20 text-rose-400 border border-rose-500/30',       icon: 'x-circle',    label: 'Falhou'        },
+            retry:    { cls: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', icon: 'rotate-ccw',  label: 'Retry'         },
+            stopping: { cls: 'bg-orange-500/20 text-orange-400 border border-orange-500/30', icon: 'loader-2',    label: 'Parando'       },
+            stopped:  { cls: 'bg-slate-700 text-[var(--text-main)] border border-slate-600',          icon: 'pause-circle',label: 'Interrompido'  },
+        };
+
+        function setChipStatus(status, text) {
+            const cfg = chipConfigs[status] || chipConfigs.queued;
+            const spinClass = status === 'stopping' ? 'animate-spin' : '';
+            statusChip.className = `px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5 flex-shrink-0 ${cfg.cls}`;
+            statusChip.innerHTML = `<i data-lucide="${cfg.icon}" class="w-3.5 h-3.5 ${spinClass}"></i>${text || cfg.label}`;
+            if (window.lucide && window.lucide.createIcons) {
+                window.lucide.createIcons({ nodes: [statusChip] });
+            }
+        }
+
+        // ── Timer de tempo decorrido ──────────────────────────────
+        function startElapsedTimer() {
+            stopElapsedTimer();
+            startTimestamp = Date.now();
+            elapsedSecs = 0;
+            const tick = () => {
+                elapsedSecs = Math.floor((Date.now() - startTimestamp) / 1000);
+                const h = Math.floor(elapsedSecs / 3600).toString().padStart(2, '0');
+                const m = Math.floor((elapsedSecs % 3600) / 60).toString().padStart(2, '0');
+                const s = (elapsedSecs % 60).toString().padStart(2, '0');
+                if (elapsedTimeEl) elapsedTimeEl.textContent = `${h}:${m}:${s}`;
+            };
+            tick();
+            elapsedTimer = setInterval(tick, 1000);
+        }
+
+        function stopElapsedTimer() {
+            if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+        }
+
+        // ── Timer de "última atualização" ─────────────────────────
+        function touchLastUpdate() {
+            lastPollTimestamp = Date.now();
+            if (lastUpdateEl) lastUpdateEl.textContent = 'Agora';
+            if (lastUpdateTimer) clearInterval(lastUpdateTimer);
+            lastUpdateTimer = setInterval(() => {
+                if (!lastPollTimestamp || !lastUpdateEl) return;
+                const secs = Math.floor((Date.now() - lastPollTimestamp) / 1000);
+                if (secs < 5)       lastUpdateEl.textContent = 'Agora';
+                else if (secs < 60) lastUpdateEl.textContent = `Há ${secs}s`;
+                else                lastUpdateEl.textContent = `Há ${Math.floor(secs / 60)}min`;
+            }, 1000);
+        }
+
+        // ── Contagem e filtro de logs ─────────────────────────────
+        function updateLogCountDisplay() {
+            if (logCountAll)  logCountAll.textContent  = String(logCounts.ALL);
+            if (logCountInfo) logCountInfo.textContent = String(logCounts.INFO);
+            if (logCountWarn) logCountWarn.textContent = String(logCounts.WARNING);
+            if (logCountErr)  logCountErr.textContent  = String(logCounts.ERROR);
+        }
+
+        const filterBtnActiveClass = {
+            'ALL':     'bg-slate-700 text-white',
+            'INFO':    'bg-slate-700 text-white',
+            'WARNING': 'bg-amber-500/20 text-amber-400',
+            'ERROR':   'bg-rose-500/20 text-rose-400',
+        };
+
+        function applyLogFilter(filter) {
+            currentLogFilter = filter;
+            // Estilizar botões
+            document.querySelectorAll('.log-filter-btn').forEach(btn => {
+                const bf = btn.getAttribute('data-log-filter');
+                btn.className = btn.className
+                    .replace('bg-slate-700 text-white', '')
+                    .replace('bg-amber-500/20 text-amber-400', '')
+                    .replace('bg-rose-500/20 text-rose-400', '')
+                    .replace('text-[var(--text-muted)] hover:bg-[var(--card-bg)]', '')
+                    .trim();
+                if (bf === filter) {
+                    btn.className += ` ${filterBtnActiveClass[filter] || 'bg-slate-700 text-white'}`;
+                } else {
+                    btn.className += ' text-[var(--text-muted)] hover:bg-[var(--card-bg)]';
+                }
+            });
+            // Mostrar/ocultar linhas
+            logStream.querySelectorAll('[data-log-level]').forEach(row => {
+                const lvl = row.getAttribute('data-log-level');
+                row.classList.toggle('hidden', filter !== 'ALL' && lvl !== filter);
+            });
+            updateEmptyState();
+        }
+
+        function updateEmptyState() {
+            const visible = logStream.querySelectorAll('[data-log-level]:not(.hidden)').length;
+            if (logEmpty) logEmpty.classList.toggle('hidden', visible > 0 || logCounts.ALL === 0);
+        }
+
+        // ── Renderização de uma linha de log ─────────────────────
+        function appendLog(entry) {
+            const rawLevel = (entry.level || 'info').toUpperCase();
+            // normalizar aliases
+            const level = rawLevel === 'SUCCESS' ? 'INFO' : rawLevel;
+
+            // Acumular entrada para cópia
+            allLogEntries.push(entry);
+
+            // Atualizar contadores
+            logCounts.ALL++;
+            if (level === 'INFO')    logCounts.INFO++;
+            else if (level === 'WARNING') logCounts.WARNING++;
+            else if (level === 'ERROR')   logCounts.ERROR++;
+            updateLogCountDisplay();
+
+            // Badge de nível
+            let levelBadge = '';
+            if (level === 'WARNING') {
+                levelBadge = '<span class="text-amber-400 font-semibold bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">[WARN]</span>';
+            } else if (level === 'ERROR') {
+                levelBadge = '<span class="text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded text-[10px]">[ERROR]</span>';
+            } else {
+                levelBadge = '<span class="text-sky-400 font-medium text-[10px]">[INFO]</span>';
+            }
+
+            // Cor da mensagem
+            let msgColor = 'text-[var(--text-main)]';
+            if (level === 'WARNING') msgColor = 'text-amber-200/90';
+            if (level === 'ERROR')   msgColor = 'text-rose-200/90';
+
+            // Fundo da linha
+            let rowBg = '';
+            if (level === 'ERROR')   rowBg = 'bg-rose-500/5';
+            if (level === 'WARNING') rowBg = 'bg-amber-500/5';
+
+            const time    = entry.timestamp || '--:--:--';
+            const context = entry.device_name || 'Sistema';
+            const message = String(entry.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const ctxSafe = context.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            const row = document.createElement('div');
+            row.className = `grid grid-cols-[75px_75px_155px_1fr] gap-3 px-2 py-1 hover:bg-[var(--card-bg)]/30 rounded items-start ${rowBg}`;
+            row.setAttribute('data-log-level', level);
+
+            // Ocultar se não bate com filtro atual
+            if (currentLogFilter !== 'ALL' && level !== currentLogFilter) {
+                row.classList.add('hidden');
+            }
+
+            row.innerHTML = `<div class="text-[var(--text-muted)] select-none pt-0.5 text-[11px]">${time}</div><div class="select-none pt-0.5">${levelBadge}</div><div class="text-indigo-400/80 truncate pt-0.5 text-[11px]" title="${ctxSafe}">[${ctxSafe}]</div><div class="pt-0.5 ${msgColor} break-words">${message}</div>`;
+
+            logStream.appendChild(row);
+            if (logEmpty) logEmpty.classList.add('hidden');
+
+            // Auto-scroll
+            if (logScrollArea) {
+                logScrollArea.scrollTop = logScrollArea.scrollHeight;
+            }
+        }
+
+        // ── Atualização do painel bulk + diagnóstico ──────────────
+        function resetBulkPanel(payload) {
+            const isBulk = Boolean(payload && payload.is_bulk);
+            if (isBulk) {
+                bulkPanel.classList.remove('hidden');
+                bulkPanel.classList.add('grid');
+            } else {
+                bulkPanel.classList.add('hidden');
+                bulkPanel.classList.remove('grid');
+            }
+            if (!isBulk) {
+                if (diagnosticPanel) { diagnosticPanel.classList.add('hidden'); diagnosticPanel.classList.remove('flex'); }
+                return;
+            }
+
+            const total   = Number(payload.total_devices  || 0);
+            const success = Number(payload.success_devices || 0);
+            const failed  = Number(payload.failed_devices  || 0);
+            const running = Number(payload.running_tasks   || 0);
+            const queuedGroups = Number(payload.queued_tasks || 0);
+            const pending = Number(payload.pending_devices || 0);
+            const runningPending = Number(payload.running_pending_devices || 0);
+            const done    = Number(payload.done_devices    || 0);
+
+            if (metricTotal)   metricTotal.textContent   = String(total);
+            if (metricSuccess) metricSuccess.textContent = String(success);
+            if (metricFailed)  metricFailed.textContent  = String(failed);
+            if (metricRunning) metricRunning.textContent = String(running);
+            if (metricRunningDetail) metricRunningDetail.textContent = `${runningPending} dispositivo(s) nestes grupos`;
+            if (metricQueued)  metricQueued.textContent  = String(pending);
+            if (metricQueuedDetail) metricQueuedDetail.textContent = `${queuedGroups} grupo(s) aguardando worker`;
+
+            // ETA dinâmico
+            if (metricEta) {
+                if (done > 0 && running > 0 && elapsedSecs > 0 && total > done) {
+                    const rate = done / elapsedSecs;
+                    const etaSecs = Math.ceil((total - done) / rate);
+                    const em = Math.floor(etaSecs / 60).toString().padStart(2, '0');
+                    const es = (etaSecs % 60).toString().padStart(2, '0');
+                    metricEta.textContent = `${em}:${es}`;
+                } else if (done >= total && total > 0) {
+                    metricEta.textContent = '00:00';
+                } else {
+                    metricEta.textContent = '--:--';
+                }
+            }
+
+            // Estado "travado"
+            const isStuck = queuedGroups > 0 && running === 0;
+            if (stuckBadge) stuckBadge.classList.toggle('hidden', !isStuck);
+            if (runningCell) {
+                runningCell.classList.toggle('border-b-2', isStuck);
+                runningCell.classList.toggle('border-amber-500', isStuck);
+                runningCell.classList.toggle('bg-amber-500/5', isStuck);
+            }
+            if (metricRunning) {
+                metricRunning.className = isStuck
+                    ? 'text-2xl font-semibold text-amber-500'
+                    : 'text-2xl font-semibold text-indigo-400';
+            }
+
+            // Diagnóstico acionável
+            const failureCounts = (payload && payload.failure_category_counts) || {};
+            let dominantCat = null;
+            let dominantVal = 0;
+            Object.keys(failureCounts).forEach(k => {
+                const v = Number(failureCounts[k] || 0);
+                if (v > dominantVal) { dominantVal = v; dominantCat = k; }
+            });
+
+            if (diagnosticPanel && failed > 0 && dominantCat && dominantVal > 0) {
+                const info = failureInfo[dominantCat] || failureInfo.unknown;
+                if (diagnosticIssue)   diagnosticIssue.textContent   = info.issue;
+                if (diagnosticAffected)diagnosticAffected.textContent = String(dominantVal);
+                if (diagnosticRec)     diagnosticRec.textContent     = info.rec;
+                diagnosticPanel.classList.remove('hidden');
+                diagnosticPanel.classList.add('flex');
+            } else if (diagnosticPanel) {
+                diagnosticPanel.classList.add('hidden');
+                diagnosticPanel.classList.remove('flex');
+            }
+
+            if (followupPanel) {
+                const followupStatus = String((payload && payload.transient_followup_status) || '').toLowerCase();
+                const candidateCount = Number((payload && payload.transient_followup_candidate_count) || 0);
+                const delaySeconds = Number((payload && payload.transient_followup_delay_seconds) || 0);
+                const followupBulkId = String((payload && payload.transient_followup_bulk_task_id) || '');
+                let followupMessage = '';
+                if (followupStatus === 'scheduled') {
+                    const delayMinutes = Math.max(1, Math.round(delaySeconds / 60));
+                    followupMessage = `${candidateCount} dispositivo(s) com falha transitória serão reprocessados em ${delayMinutes} min.`;
+                } else if (followupStatus === 'waiting_lock') {
+                    followupMessage = 'Retry automático aguardando outro lote terminar para não sobrecarregar a fila.';
+                } else if (followupStatus === 'starting') {
+                    followupMessage = 'Retry automático preparando a nova fila de falhas transitórias.';
+                } else if (followupStatus === 'running') {
+                    followupMessage = `Retry automático em execução${followupBulkId ? ` (${followupBulkId})` : ''}.`;
+                } else if (followupStatus === 'skipped') {
+                    followupMessage = 'Retry automático não precisou executar: os dispositivos já não estavam mais elegíveis.';
+                } else if (followupStatus === 'failed') {
+                    followupMessage = 'Retry automático falhou ao iniciar; veja os logs do lote.';
+                }
+                if (followupMessage) {
+                    if (followupTitle) followupTitle.textContent = 'Retry automático';
+                    if (followupText) followupText.textContent = followupMessage;
+                    followupPanel.classList.remove('hidden');
+                    followupPanel.classList.add('flex');
+                } else {
+                    followupPanel.classList.add('hidden');
+                    followupPanel.classList.remove('flex');
+                }
+            }
+        }
+
+        // ── Reset completo do modal ───────────────────────────────
+        function resetModal(taskId, deviceName, payload = {}) {
+            titleEl.textContent       = deviceName || 'Backup em execução';
+            taskEl.textContent        = taskId || '--';
+            statusMsg.textContent     = 'Aguardando inicio no worker...';
+            progressLabel.textContent = '0% Concluído';
+            progressBar.style.width        = '0%';
+            progressFailedBar.style.width  = '0%';
+            setChipStatus('queued', 'Em fila');
+            logStream.innerHTML = '';
+            allLogEntries = [];
+            logCounts = { ALL: 0, INFO: 0, WARNING: 0, ERROR: 0 };
+            updateLogCountDisplay();
+            applyLogFilter('ALL');
+            if (logEmpty) logEmpty.classList.add('hidden');
+            resetBulkPanel(payload);
+            currentCompleted = false;
+            shouldRefreshOnClose = false;
+            lastProgressValue = 0;
+            elapsedSecs = 0;
+            if (elapsedTimeEl) elapsedTimeEl.textContent = '00:00:00';
+            if (lastUpdateEl)  lastUpdateEl.textContent  = '--';
+            startElapsedTimer();
+
+            appendLog({
+                level: 'info',
+                timestamp: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
+                device_name: deviceName || 'Sistema',
+                message: 'Task enfileirada. Aguardando worker...',
+            });
+
+            currentCancelUrl  = payload.cancel_url  || null;
+            currentIsBulk     = Boolean(payload && payload.is_bulk);
+            currentStatusUrl  = payload.status_url  || currentStatusUrl;
+            currentLogsUrl    = payload.logs_url    || currentLogsUrl;
+            currentDeviceName = deviceName          || currentDeviceName;
+
+            if (stopBtn) {
+                stopBtn.classList.toggle('hidden', !(currentIsBulk && currentCancelUrl));
+                stopBtn.disabled = false;
+                stopBtn.innerHTML = '<i data-lucide="square" class="h-4 w-4"></i> Parar lote';
+                if (window.lucide && window.lucide.createIcons) window.lucide.createIcons({ nodes: [stopBtn] });
+            }
+            if (currentIsBulk && taskId) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                        task_id:     taskId,
+                        device_name: currentDeviceName || 'Backup em massa',
+                        status_url:  currentStatusUrl,
+                        logs_url:    currentLogsUrl,
+                        cancel_url:  currentCancelUrl,
+                    }));
+                } catch (_) {}
+                if (bulkControlTask) bulkControlTask.textContent = `task_id: ${taskId}`;
+                if (bulkControl) bulkControl.classList.remove('hidden');
+            }
+        }
+
+        // ── Abrir / minimizar / fechar modal ─────────────────────
+        function openModal() {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+        }
+
+        function minimizeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            if (currentIsBulk && !currentCompleted && bulkControl) bulkControl.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            const keepTracking = Boolean(currentIsBulk && currentTaskId && !currentCompleted);
+            if (keepTracking) { minimizeModal(); return; }
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            stopElapsedTimer();
+            if (lastUpdateTimer) { clearInterval(lastUpdateTimer); lastUpdateTimer = null; }
+            currentTaskId = null;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            if (shouldRefreshOnClose && document.querySelector('[data-backup-auto-refresh]')) {
+                shouldRefreshOnClose = false;
+                window.location.reload();
+            }
+        }
+
+        // ── Cópia de logs ─────────────────────────────────────────
+        function showCopyToast() {
+            if (!copyToast) return;
+            copyToast.classList.remove('hidden');
+            copyToast.classList.add('flex');
+            setTimeout(() => { copyToast.classList.add('hidden'); copyToast.classList.remove('flex'); }, 3000);
+        }
+
+        function setCopySuccess(btn, originalHtml) {
+            if (!btn) return;
+            btn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Copiado!';
+            btn.classList.add('bg-emerald-500/20', 'text-emerald-400', 'border-emerald-500/30');
+            btn.classList.remove('text-[var(--text-main)]', 'hover:text-white', 'hover:bg-[var(--card-bg)]', 'border-[var(--card-border)]');
+            if (window.lucide && window.lucide.createIcons) window.lucide.createIcons({ nodes: [btn] });
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('bg-emerald-500/20', 'text-emerald-400', 'border-emerald-500/30');
+                btn.classList.add('text-[var(--text-main)]', 'hover:text-white', 'hover:bg-[var(--card-bg)]', 'border-[var(--card-border)]');
+                if (window.lucide && window.lucide.createIcons) window.lucide.createIcons({ nodes: [btn] });
+            }, 2000);
+        }
+
+        async function copyLogsToClipboard(errorsOnly) {
+            const entries = errorsOnly
+                ? allLogEntries.filter(e => { const l = (e.level || '').toUpperCase(); return l === 'ERROR' || l === 'WARNING'; })
+                : allLogEntries;
+            const text = entries
+                .map(e => `[${e.timestamp || '--:--:--'}] [${(e.level || 'info').toUpperCase()}] [${e.device_name || 'Sistema'}] ${e.message || ''}`)
+                .join('\n');
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+                    document.body.appendChild(ta);
+                    ta.focus(); ta.select();
+                    if (!document.execCommand('copy')) throw new Error('execCommand failed');
+                    document.body.removeChild(ta);
+                }
+                if (errorsOnly) {
+                    setCopySuccess(copyErrorsBtn, '<i data-lucide="alert-triangle" class="w-3 h-3"></i> Copiar Erros');
+                } else {
+                    setCopySuccess(copyAllBtn, '<i data-lucide="copy" class="w-3 h-3"></i> Copiar Todos');
+                }
+            } catch (_) {
+                showCopyToast();
+            }
+        }
+
+        // ── Polling ───────────────────────────────────────────────
+        async function tryResumeExistingBulkOperation() {
+            let taskId = currentTaskId, statusUrl = currentStatusUrl, logsUrl = currentLogsUrl;
+            let deviceName = currentDeviceName || 'Operação em massa', cancelUrl = currentCancelUrl;
+
+            if (!taskId || !statusUrl || !logsUrl) {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) {
+                        const d = JSON.parse(raw);
+                        taskId = d.task_id || taskId; statusUrl = d.status_url || statusUrl;
+                        logsUrl = d.logs_url || logsUrl; deviceName = d.device_name || deviceName;
+                        cancelUrl = d.cancel_url || cancelUrl;
+                    }
+                } catch (_) {}
+            }
+            if (!taskId || !statusUrl || !logsUrl) return false;
+
+            try {
+                const statusData = await fetchStatus(taskId, statusUrl);
+                if (!statusData || !statusData.ok) {
+                    try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+                    return false;
+                }
+                const normalized = normalizeStatus(statusData.status, statusData.celery_state);
+                const stillRunning = !statusData.completed && !['success','failed','stopped'].includes(normalized);
+                if (!stillRunning) {
+                    try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+                    return false;
+                }
+                currentTaskId = taskId; currentStatusUrl = statusUrl; currentLogsUrl = logsUrl;
+                currentDeviceName = deviceName; currentCancelUrl = cancelUrl || currentCancelUrl;
+                currentIsBulk = true; currentCompleted = false;
+
+                resetModal(taskId, deviceName, { is_bulk: true, cancel_url: currentCancelUrl, status_url: statusUrl, logs_url: logsUrl });
+                openModal();
+                await startPolling(taskId, statusUrl, logsUrl);
+                return true;
+            } catch (_) { return false; }
+        }
+
+        async function fetchStatus(taskId, statusUrl) {
+            const r = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+            if (!r.ok) return null;
+            return r.json();
+        }
+
+        async function fetchLogs(taskId, logsUrl) {
+            const sep = logsUrl.includes('?') ? '&' : '?';
+            const r = await fetch(`${logsUrl}${sep}after=${lastLogSeq}`, { headers: { 'Accept': 'application/json' } });
+            if (!r.ok) return null;
+            return r.json();
+        }
+
+        function normalizeStatus(status, celeryState) {
+            const s = (status || '').toLowerCase();
+            if (s) return s;
+            const c = (celeryState || '').toUpperCase();
+            if (c === 'SUCCESS') return 'success';
+            if (c === 'FAILURE') return 'failed';
+            if (c === 'REVOKED') return 'stopped';
+            if (c === 'STARTED') return 'running';
+            return 'queued';
+        }
+
+        async function startPolling(taskId, statusUrl, logsUrl) {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            currentTaskId = taskId; currentCompleted = false; lastLogSeq = 0; lastProgressValue = 0; pollInFlight = false;
+
+            const tick = async () => {
+                if (!currentTaskId || pollInFlight || document.hidden) return;
+                pollInFlight = true;
+                try {
+                    const [statusData, logsData] = await Promise.all([
+                        fetchStatus(taskId, statusUrl),
+                        fetchLogs(taskId, logsUrl),
+                    ]);
+
+                    touchLastUpdate();
+
+                    if (logsData && Array.isArray(logsData.entries)) {
+                        logsData.entries.forEach(appendLog);
+                        lastLogSeq = Number(logsData.last_seq || lastLogSeq || 0);
+                    }
+
+                    if (statusData && statusData.ok) {
+                        const normalized = normalizeStatus(statusData.status, statusData.celery_state);
+                        const total   = Number(statusData.total_devices  || 0);
+                        const success = Number(statusData.success_devices || 0);
+                        const failed  = Number(statusData.failed_devices  || 0);
+
+                        // Barra de progresso: segmentada para bulk, simples para individual
+                        if (currentIsBulk && total > 0) {
+                            const sPct = (success / total) * 100;
+                            const fPct = (failed  / total) * 100;
+                            const cPct = sPct + fPct;
+                            progressBar.style.width       = `${sPct}%`;
+                            progressFailedBar.style.width = `${fPct}%`;
+                            progressLabel.textContent     = `${cPct.toFixed(0)}% Concluído`;
+                        } else {
+                            let progress = Math.max(0, Math.min(100, Number(statusData.progress || 0)));
+                            if (!statusData.completed && !['success','failed','stopped'].includes(normalized)) {
+                                progress = Math.max(lastProgressValue, progress);
+                            }
+                            lastProgressValue = progress;
+                            progressBar.style.width       = `${progress}%`;
+                            progressFailedBar.style.width = '0%';
+                            progressLabel.textContent     = `${progress}%`;
+                        }
+
+                        statusMsg.textContent = statusData.message || 'Executando...';
+                        resetBulkPanel(statusData);
+
+                        const chipLabels = { running:'Executando', queued:'Em fila', retry:'Retry', success:'Concluído', failed:'Falhou', stopping:'Parando', stopped:'Interrompido' };
+                        if (chipLabels[normalized]) setChipStatus(normalized, chipLabels[normalized]);
+
+                        currentCancelUrl = statusData.cancel_url || currentCancelUrl;
+                        // Botão de stop visível para bulk E para backup individual (is_bulk=false mas cancel_url presente)
+                        const canStop = Boolean(currentCancelUrl && !statusData.completed && !['success','failed','stopped'].includes(normalized));
+                        if (stopBtn) {
+                            stopBtn.classList.toggle('hidden', !canStop);
+                            // Ajusta label conforme tipo de operação
+                            if (canStop) {
+                                const isIndividual = !statusData.is_bulk;
+                                stopBtn.querySelector('i') && (stopBtn.innerHTML = `<i data-lucide="square" class="h-4 w-4"></i> ${isIndividual ? 'Parar backup' : 'Parar lote'}`);
+                                if (window.lucide && window.lucide.createIcons) window.lucide.createIcons({ nodes: [stopBtn] });
+                            }
+                        }
+                        if (bulkControlStopBtn) bulkControlStopBtn.disabled = !canStop;
+
+                        if (statusData.completed || ['success','failed','stopped'].includes(normalized)) {
+                            currentCompleted = true;
+                            shouldRefreshOnClose = true;
+                            window.dispatchEvent(new CustomEvent('backup-live-completed', {
+                                detail: {
+                                    task_id: taskId,
+                                    status: normalized,
+                                    success_devices: success,
+                                    failed_devices: failed,
+                                    is_bulk: currentIsBulk,
+                                },
+                            }));
+                            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+                            stopElapsedTimer();
+                            if (['success','failed','stopped'].includes(normalized) || statusData.completed) {
+                                try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+                                if (bulkControl) bulkControl.classList.add('hidden');
+                            }
+                        }
+                    }
+                } finally { pollInFlight = false; }
+            };
+
+            await tick();
+            const pollIntervalMs = currentIsBulk ? 5000 : 3000;
+            pollTimer = setInterval(tick, pollIntervalMs);
+            if (visibilityPollHandler) {
+                document.removeEventListener('visibilitychange', visibilityPollHandler);
+            }
+            visibilityPollHandler = () => {
+                if (!document.hidden && currentTaskId && !pollInFlight && pollTimer) {
+                    tick();
+                }
+            };
+            document.addEventListener('visibilitychange', visibilityPollHandler);
+        }
+
+        // ── Disparar backup a partir de um form ───────────────────
+        async function triggerBackupFromForm(form) {
+            const submitBtn = form.querySelector('[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                const formData = new FormData(form);
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) throw new Error(data.error || 'Falha ao iniciar operação');
+                resetModal(data.task_id, data.device_name, data);
+                openModal();
+                await startPolling(data.task_id, data.status_url, data.logs_url);
+            } catch (error) {
+                alert(`Não foi possível iniciar a operação: ${error.message}`);
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        // ── Parar backup (individual ou em massa) ─────────────────
+        async function stopBulkBackup() {
+            if (!currentCancelUrl) return;
+            const msg = currentIsBulk ? 'Parar o backup em massa agora?' : 'Parar o backup deste dispositivo agora?';
+            if (!confirm(msg)) return;
+            stopBtn.disabled = true;
+            stopBtn.innerHTML = '<i data-lucide="loader-2" class="h-4 w-4 animate-spin"></i> Parando...';
+            if (window.lucide && window.lucide.createIcons) window.lucide.createIcons({ nodes: [stopBtn] });
+            try {
+                const csrfTokenValue = csrfTokenInput?.value || '';
+                const body = new URLSearchParams();
+                if (csrfTokenValue) {
+                    body.append('_csrf_token', csrfTokenValue);
+                }
+                const r = await fetch(currentCancelUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-Token': csrfTokenValue,
+                        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    },
+                    body: body.toString(),
+                });
+                const contentType = String(r.headers.get('content-type') || '').toLowerCase();
+                const data = contentType.includes('application/json')
+                    ? await r.json()
+                    : { ok: false, error: `HTTP ${r.status}` };
+                if (!r.ok || !data.ok) throw new Error(data.error || 'Falha ao solicitar parada.');
+                appendLog({
+                    level: 'warning',
+                    timestamp: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
+                    device_name: 'Backup em massa',
+                    message: `Parada solicitada. Revogação enviada para ${Number(data.revoke_requested || 0)} task(s).`,
+                });
+                if (bulkControlStopBtn) bulkControlStopBtn.disabled = true;
+            } catch (error) {
+                stopBtn.disabled = false;
+                stopBtn.innerHTML = '<i data-lucide="square" class="h-4 w-4"></i> Parar lote';
+                appendLog({
+                    level: 'error',
+                    timestamp: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
+                    device_name: 'Backup em massa',
+                    message: `Falha ao parar lote: ${error.message}`,
+                });
+            } finally {
+                if (window.lucide && window.lucide.createIcons) window.lucide.createIcons({ nodes: [stopBtn] });
+            }
+        }
+
+        // ── Eventos ───────────────────────────────────────────────
+
+        // Botões com [data-run-backup-live]
+        document.querySelectorAll('[data-run-backup-live]').forEach(trigger => {
+            trigger.addEventListener('click', async event => {
+                event.preventDefault();
+                const formId = trigger.getAttribute('data-form-id');
+                let form = formId ? document.getElementById(formId) : null;
+                if (!form) form = trigger.closest('form');
+                if (!form) return;
+                await triggerBackupFromForm(form);
+            });
+        });
+
+        // Fechar / parar / limpar
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (stopBtn)  stopBtn.addEventListener('click', stopBulkBackup);
+        if (clearBtn) clearBtn.addEventListener('click', () => {
+            logStream.innerHTML = '';
+            allLogEntries = [];
+            logCounts = { ALL: 0, INFO: 0, WARNING: 0, ERROR: 0 };
+            updateLogCountDisplay();
+            if (logEmpty) { logEmpty.classList.remove('hidden'); logEmpty.classList.add('flex'); }
+        });
+
+        // Copiar logs
+        if (copyAllBtn)    copyAllBtn.addEventListener('click',    () => copyLogsToClipboard(false));
+        if (copyErrorsBtn) copyErrorsBtn.addEventListener('click', () => copyLogsToClipboard(true));
+
+        // Filtros de log
+        document.querySelectorAll('.log-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => applyLogFilter(btn.getAttribute('data-log-filter')));
+        });
+
+        // Widget flutuante (bulk minimizado)
+        if (bulkControlStopBtn) bulkControlStopBtn.addEventListener('click', stopBulkBackup);
+        if (bulkControlOpenBtn) {
+            bulkControlOpenBtn.addEventListener('click', async () => {
+                if (!currentTaskId && currentStatusUrl) {
+                    try {
+                        const raw = localStorage.getItem(STORAGE_KEY);
+                        if (raw) {
+                            const d = JSON.parse(raw);
+                            currentTaskId = d.task_id || currentTaskId; currentDeviceName = d.device_name || currentDeviceName;
+                            currentStatusUrl = d.status_url || currentStatusUrl; currentLogsUrl = d.logs_url || currentLogsUrl;
+                            currentCancelUrl = d.cancel_url || currentCancelUrl; currentIsBulk = true;
+                        }
+                    } catch (_) {}
+                }
+                if (!currentTaskId || !currentStatusUrl || !currentLogsUrl) return;
+                resetModal(currentTaskId, currentDeviceName || 'Backup em massa', {
+                    is_bulk: true, cancel_url: currentCancelUrl, status_url: currentStatusUrl, logs_url: currentLogsUrl,
+                });
+                openModal();
+                await startPolling(currentTaskId, currentStatusUrl, currentLogsUrl);
+            });
+        }
+
+        // Botão "Retestar Falhas" — placeholder para feature futura
+        if (diagRetryBtn) {
+            diagRetryBtn.addEventListener('click', () => {
+                appendLog({
+                    level: 'info',
+                    timestamp: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
+                    device_name: 'Sistema',
+                    message: 'Retestar falhas: funcionalidade em desenvolvimento.',
+                });
+            });
+        }
+
+        // Fechar ao clicar no backdrop
+        modal.addEventListener('click', event => {
+            if (event.target !== modal) return;
+            if (currentIsBulk && currentTaskId && !currentCompleted) { minimizeModal(); return; }
+            closeModal();
+        });
+
+        // Restaurar bulk pendente do localStorage ao carregar a página
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const d = JSON.parse(raw);
+                currentTaskId = d.task_id || null; currentDeviceName = d.device_name || 'Backup em massa';
+                currentStatusUrl = d.status_url || null; currentLogsUrl = d.logs_url || null;
+                currentCancelUrl = d.cancel_url || null;
+                currentIsBulk = Boolean(currentTaskId && currentStatusUrl && currentLogsUrl);
+                if (currentIsBulk) {
+                    if (bulkControlTask) bulkControlTask.textContent = `task_id: ${currentTaskId}`;
+                    if (bulkControl) bulkControl.classList.remove('hidden');
+                }
+            }
+        } catch (_) {}
+
+    })();
+</script>

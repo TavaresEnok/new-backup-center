@@ -1,0 +1,33 @@
+{% extends "base_redesign.html" %}
+{% block title %}Notificações · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant.slug) }}">Configurações</a><i data-lucide="chevron-right"></i><b>Notificações</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/settings.py notifications): tenant, notifications[{type.value,title,message,created_at}] #}
+<div class="wrap">
+  <div class="page-h"><div class="eyebrow">Conta</div><h1>Notificações</h1><p>Últimas notificações sobre falhas, sucessos e eventos importantes.</p></div>
+  <div class="set-grid" style="display:grid;grid-template-columns:240px 1fr;gap:26px;align-items:start">
+    {% set settings_section = 'notifications' %}{% include 'partials/settings_nav_redesign.html' %}
+    <div class="panel">
+      <div class="panel-head"><h3><i data-lucide="bell"></i>Central de alertas</h3><span class="tag">{{ notifications|length }} item(ns)</span></div>
+      <div>
+        {% for notif in notifications %}
+        {% set nt = notif.type.value if notif.type else '' %}
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:16px 26px;border-bottom:1px solid var(--line)">
+          <span style="width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;background:{% if nt=='backup_success' %}var(--good-soft);color:var(--good){% elif nt=='backup_failed' %}var(--care-soft);color:var(--care){% else %}var(--pine-soft);color:var(--pine){% endif %}">
+            <i data-lucide="{% if nt=='backup_success' %}check-circle{% elif nt=='backup_failed' %}alert-circle{% else %}bell{% endif %}" style="width:18px;height:18px"></i>
+          </span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;gap:10px"><span style="font-weight:600;font-size:13.5px">{{ notif.title }}</span><span class="faint" style="font-size:11.5px;font-family:var(--mono)">{{ (notif.created_at|localtime).strftime('%d/%m %H:%M') if notif.created_at else '—' }}</span></div>
+            <div class="faint" style="font-size:12.5px;margin-top:3px">{{ notif.message }}</div>
+          </div>
+        </div>
+        {% else %}
+        <div class="empty"><div class="empty-ic"><i data-lucide="bell-off"></i></div><h4>Sem notificações</h4><p>Você não tem notificações recentes.</p></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+<style>@media (max-width:860px){ .set-grid{grid-template-columns:1fr !important} }</style>
+{% endblock %}

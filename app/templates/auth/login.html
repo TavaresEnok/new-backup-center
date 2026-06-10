@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Backup Center</title>
+
+    <link href="{{ url_for('static', filename='css/redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/auth_redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body>
+    <main class="auth-page" x-data="{ showPassword: false }">
+        <div class="auth-shell">
+            <div class="auth-grid">
+                <aside class="auth-story">
+                    <div class="auth-brand">
+                        <div class="brand-mark">
+                            <i data-lucide="shield-check"></i>
+                        </div>
+                        <div class="auth-brand-copy">
+                            <strong>Backup Center</strong>
+                            <span>Operacao ISP protegida</span>
+                        </div>
+                    </div>
+
+                    <div class="auth-copy">
+                        <p class="eyebrow">Acesso seguro</p>
+                        <h1>Controle de backups sem ruido.</h1>
+                        <p>Entre para acompanhar operacoes, dispositivos, historico e rotinas criticas com a mesma clareza do novo painel.</p>
+                    </div>
+
+                    <div class="auth-signal">
+                        <div class="auth-signal-card">
+                            <span>Disponibilidade</span>
+                            <strong>Rotinas monitoradas</strong>
+                        </div>
+                        <div class="auth-signal-card">
+                            <span>Validacao</span>
+                            <strong>Integridade SHA-256</strong>
+                        </div>
+                        <div class="auth-signal-card">
+                            <span>Seguranca</span>
+                            <strong>Acesso com 2FA</strong>
+                        </div>
+                    </div>
+                </aside>
+
+                <section class="auth-form-panel">
+                    <div class="auth-security-strip">
+                        <span class="tag tag-pine"><i data-lucide="lock-keyhole"></i>TLS ativo</span>
+                        <span class="tag tag-good"><i data-lucide="check-circle-2"></i>Acesso protegido</span>
+                    </div>
+
+                    <header class="auth-head">
+                        <p class="eyebrow">Backup Center</p>
+                        <h2>Entrar na conta</h2>
+                        <p>Informe suas credenciais para acessar o ambiente operacional.</p>
+                    </header>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    <div class="auth-flashes">
+                        {% for category, message in messages %}
+                        <div class="auth-flash {% if category == 'success' %}is-success{% elif category == 'warning' %}is-warning{% elif category == 'info' %}is-info{% elif category == 'danger' %}is-danger{% else %}is-error{% endif %}">
+                            {{ message }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+
+                    <form action="" method="POST" class="auth-form">
+                        {% include 'partials/csrf.html' %}
+
+                        <div class="auth-field-group">
+                            <label for="email" class="auth-label">E-mail</label>
+                            <div class="field auth-field">
+                                <i data-lucide="mail"></i>
+                                <input id="email" name="email" type="email" required autocomplete="email" placeholder="admin@suaempresa.com">
+                            </div>
+                        </div>
+
+                        <div class="auth-field-group">
+                            <div class="auth-label-row">
+                                <label for="password" class="auth-label">Senha</label>
+                                <a href="{{ url_for('auth.forgot_password') }}" class="auth-link">Esqueci minha senha</a>
+                            </div>
+                            <div class="field auth-field">
+                                <i data-lucide="lock"></i>
+                                <input id="password" name="password" :type="showPassword ? 'text' : 'password'" required autocomplete="current-password" placeholder="Sua senha">
+                                <button type="button" class="auth-icon-btn" @click="showPassword = !showPassword" :aria-label="showPassword ? 'Ocultar senha' : 'Mostrar senha'">
+                                    <i data-lucide="eye" x-show="!showPassword"></i>
+                                    <i data-lucide="eye-off" x-show="showPassword" x-cloak></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-pine btn-full">
+                            <i data-lucide="log-in"></i>
+                            Acessar conta
+                        </button>
+                    </form>
+
+                    <footer class="auth-foot">
+                        <span>Ambiente protegido</span>
+                        <span class="tag tag-good"><i data-lucide="shield-check"></i>2FA disponivel</span>
+                    </footer>
+
+                    <div class="auth-register">
+                        Novo cliente?
+                        <a href="{{ url_for('auth.register') }}" class="auth-link">Criar conta e escolher plano</a>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

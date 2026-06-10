@@ -1,0 +1,85 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Editar Cliente | Super Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page admin-page--narrow">
+    <div class="admin-page-header">
+        <div class="admin-page-header-copy">
+            <h1 class="admin-page-title">Editar cliente</h1>
+            <p class="admin-page-subtitle">Ajuste dados de cadastro, slug e status de assinatura de {{ tenant.name }}.</p>
+        </div>
+    </div>
+
+    <form method="POST" class="premium-card admin-form-card">
+        {% include 'partials/csrf.html' %}
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+                <label for="name" class="admin-label">Nome da empresa</label>
+                <input type="text" name="name" id="name" value="{{ tenant.name }}" required class="admin-control">
+            </div>
+            <div>
+                <label for="company_name" class="admin-label">Razao social</label>
+                <input type="text" name="company_name" id="company_name" value="{{ tenant.company_name or '' }}" class="admin-control">
+            </div>
+            <div>
+                <label for="slug" class="admin-label">Slug</label>
+                <input type="text" name="slug" id="slug" value="{{ tenant.slug }}" required class="admin-control">
+            </div>
+            <div>
+                <label for="email" class="admin-label">E-mail do cliente</label>
+                <input type="email" name="email" id="email" value="{{ tenant.email }}" required class="admin-control">
+            </div>
+            <div>
+                <label for="plan_id" class="admin-label">Plano</label>
+                <select name="plan_id" id="plan_id" class="admin-control">
+                    <option value="">Sem plano</option>
+                    {% for plan in plans %}
+                    <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>{{ plan.name }} • {{ plan.max_devices }} dispositivos</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label for="subscription_status" class="admin-label">Status da assinatura</label>
+                <select name="subscription_status" id="subscription_status" class="admin-control">
+                    <option value="trial" {% if (tenant.subscription_status or '') == 'trial' %}selected{% endif %}>Trial</option>
+                    <option value="active" {% if (tenant.subscription_status or '') == 'active' %}selected{% endif %}>Active</option>
+                    <option value="pending_payment" {% if (tenant.subscription_status or '') == 'pending_payment' %}selected{% endif %}>Pending payment</option>
+                    <option value="past_due" {% if (tenant.subscription_status or '') == 'past_due' %}selected{% endif %}>Past due</option>
+                    <option value="canceled" {% if (tenant.subscription_status or '') == 'canceled' %}selected{% endif %}>Canceled</option>
+                </select>
+            </div>
+        </div>
+
+        <label class="admin-toggle-card">
+            <input type="checkbox" name="is_active" {% if tenant.is_active %}checked{% endif %}
+                class="h-4 w-4 rounded border-[var(--card-border)]">
+            <span class="text-sm">Cliente ativo. Desmarque apenas se quiser suspender o acesso desse cliente.</span>
+        </label>
+
+        <label class="admin-toggle-card">
+            <input type="checkbox" name="access_unlimited" {% if tenant.access_unlimited %}checked{% endif %}
+                class="h-4 w-4 rounded border-[var(--card-border)]">
+            <span class="text-sm">Acesso ilimitado. Permite operar sem depender do limite do plano.</span>
+        </label>
+
+        {% if tenant.protected_system_tenant %}
+        <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            Cliente protegido. Nao pode ser apagado via painel administrativo.
+        </div>
+        {% endif %}
+
+        <div class="admin-form-actions">
+            <a href="{{ url_for('superadmin_tenants.list_tenants') }}"
+                class="rounded-lg border border-[var(--card-border)] px-4 py-2.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                Cancelar
+            </a>
+            <button type="submit"
+                class="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                Salvar alteracoes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

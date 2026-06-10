@@ -1,0 +1,133 @@
+{% extends "base_redesign.html" %}
+{% block title %}Histórico de backups · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Histórico de backups</b>{% endblock %}
+
+{% block head %}
+<style>
+  .bar { display: flex; gap: 14px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .bar .field { flex: 1; min-width: 200px; }
+  .bar .field.sm2 { flex: 0 0 auto; min-width: 150px; }
+  .when { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+  .when.old { color: var(--care); }
+  .reason { font-size: 11.5px; color: var(--care); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+  .reason svg { width: 12px; height: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto: tenant, stats{total,success,failed}, devices, current_device_id,
+   current_status, per_page, backups[Backup], recommended_backup_ids, total, total_pages, page #}
+{% set success_rate = (stats.success * 100 / stats.total)|round(1) if stats.total else 0 %}
+
+<div class="wrap">
+  <div class="page-h head-row">
+    <div>
+      <div class="eyebrow">Últimos 7 dias</div>
+      <h1>Histórico de backups</h1>
+      <p>Cada execução, registrada. Acompanhe o que concluiu e entenda com calma o motivo das pendências antes de agir em equipamentos críticos.</p>
+    </div>
+    <div class="actions">
+      <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-line"><i data-lucide="server"></i>Dispositivos</a>
+      <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}" class="btn btn-pine"><i data-lucide="refresh-cw"></i>Atualizar</a>
+    </div>
+  </div>
+
+  {# Summary strip #}
+  <div class="panel summary">
+    <div class="sm"><div class="n">{{ stats.total }}</div><div class="l">execuções</div></div>
+    <div class="sm"><div class="n" style="color:var(--pine)">{{ stats.success }}</div><div class="l">concluídas</div></div>
+    <div class="sm"><div class="n" style="color:var(--care)">{{ stats.failed }}</div><div class="l">pendências</div></div>
+    <div class="sm"><div class="n">{{ success_rate }}%</div><div class="l">taxa de sucesso</div></div>
+  </div>
+
+  {# Filtros — bar com seg e device #}
+  <form method="GET" action="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}">
+    <div class="bar">
+      <div class="field">
+        <i data-lucide="search"></i>
+        <select name="device_id">
+          <option value="">Buscar dispositivo…</option>
+          {% for device in devices %}<option value="{{ device.id }}" {{ 'selected' if current_device_id == device.id|string else '' }}>{{ device.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="seg">
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, device_id=current_device_id, per_page=per_page) }}" class="{% if not current_status %}on{% endif %}">Todos</a>
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, status='failed', device_id=current_device_id, per_page=per_page) }}" class="{% if current_status=='failed' %}on{% endif %}">Pendências <span class="c">{{ stats.failed }}</span></a>
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, status='success', device_id=current_device_id, per_page=per_page) }}" class="{% if current_status=='success' %}on{% endif %}">Concluídos</a>
+      </div>
+      <div class="field sm2">
+        <i data-lucide="filter"></i>
+        <select name="per_page" onchange="this.form.submit()">
+          <option value="25" {{ 'selected' if per_page==25 else '' }}>25 / pág</option>
+          <option value="50" {{ 'selected' if per_page==50 else '' }}>50 / pág</option>
+          <option value="100" {{ 'selected' if per_page==100 else '' }}>100 / pág</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-pine"><i data-lucide="search"></i>Filtrar</button>
+    </div>
+  </form>
+
+  {% if backups %}
+  <div class="panel">
+    <div class="sc" style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th class="col-name">Dispositivo</th>
+          <th class="col-md">Tipo</th>
+          <th class="shrink">Quando</th>
+          <th class="col-md shrink">Duração</th>
+          <th class="col-lg shrink">Tamanho</th>
+          <th>Resultado</th>
+          <th style="text-align:right">Ações</th>
+        </tr></thead>
+        <tbody>
+          {% for backup in backups %}
+          {% set s = (backup.status_value if backup.status_value is defined else (backup.status.value if backup.status and backup.status.value is defined else backup.status))|default('') %}
+          <tr>
+            <td class="col-name">
+              <div class="dv-name">{{ backup.device.name if backup.device else '—' }}</div>
+              <div class="faint" style="font-family:var(--mono);font-size:11.5px">{{ backup.device.ip_address if backup.device else '' }}</div>
+              {% if backup.id|string in recommended_backup_ids %}<div class="tag tag-good" style="display:inline-flex;margin-top:5px"><i data-lucide="check"></i>Restore recomendado</div>{% endif %}
+            </td>
+            <td><span class="faint" style="font-size:12px">{{ backup.device.ip_address if backup.device else '—' }}</span></td>
+            <td><span class="when">{{ (backup.created_at|localtime).strftime('%d/%m · %H:%M') if backup.created_at else '—' }}</span></td>
+            <td class="faint" style="font-family:var(--mono);font-size:12px">{{ (backup.duration_seconds ~ 's') if backup.duration_seconds else '—' }}</td>
+            <td class="faint" style="font-family:var(--mono);font-size:12px">{% if backup.file_size_bytes %}{% if backup.file_size_bytes > 1048576 %}{{ (backup.file_size_bytes/1048576)|round(2) }} MB{% else %}{{ (backup.file_size_bytes/1024)|round(1) }} KB{% endif %}{% else %}—{% endif %}</td>
+            <td>
+              {% if s == 'success' %}<span class="tag tag-good"><i data-lucide="check"></i>Concluído</span>
+              {% elif s == 'failed' or s == 'failure' %}<span class="tag tag-care"><i data-lucide="alert-triangle"></i>Pendência</span>
+              {% else %}<span class="tag"><i data-lucide="clock"></i>{{ s|title if s else 'Pendente' }}</span>{% endif %}
+            </td>
+            <td>
+              <div class="row g2" style="justify-content:flex-end">
+                <a href="{{ url_for('tenant_backups.view_backup', tenant_slug=tenant.slug, backup_id=backup.id) }}" class="act" title="Ver"><i data-lucide="eye"></i></a>
+                {% if backup.file_path %}<a href="{{ url_for('tenant_backups.download_backup', tenant_slug=tenant.slug, backup_id=backup.id) }}" class="act" title="Download"><i data-lucide="download"></i></a>{% endif %}
+                {% if backup.device %}<a href="{{ url_for('tenant_compare.compare_backups', tenant_slug=tenant.slug, device_id=backup.device.id) }}" class="act" title="Comparar"><i data-lucide="git-compare"></i></a>{% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if total_pages > 1 %}
+    <div class="pg">
+      <span class="faint" style="font-size:13px">Página <b style="color:var(--ink)">{{ page }}</b> de {{ total_pages }} · {{ total }} registro(s)</span>
+      <div class="row g2">
+        {% if page > 1 %}<a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, page=page-1, per_page=per_page, device_id=current_device_id, status=current_status) }}" class="act"><i data-lucide="chevron-left"></i></a>{% endif %}
+        {% set p_start = [1, page-2]|max %}{% set p_end = [total_pages, page+2]|min %}
+        {% for p in range(p_start, p_end+1) %}
+          {% if p == page %}<span class="btn btn-pine btn-sm">{{ p }}</span>
+          {% else %}<a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, page=p, per_page=per_page, device_id=current_device_id, status=current_status) }}" class="btn btn-ghost btn-sm">{{ p }}</a>{% endif %}
+        {% endfor %}
+        {% if page < total_pages %}<a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, page=page+1, per_page=per_page, device_id=current_device_id, status=current_status) }}" class="act"><i data-lucide="chevron-right"></i></a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="panel"><div class="empty"><div class="empty-ic"><i data-lucide="hard-drive"></i></div><h4>Nenhum backup encontrado</h4><p>{% if current_device_id or current_status %}Nenhum backup corresponde aos filtros aplicados.{% else %}Execute backups nos dispositivos para ver o histórico aqui.{% endif %}</p></div></div>
+  {% endif %}
+</div>
+{% endblock %}

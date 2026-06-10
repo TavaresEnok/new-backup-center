@@ -1,0 +1,183 @@
+<aside
+    class="bc-sidebar fixed left-0 top-0 z-50 flex h-screen flex-col overflow-y-hidden duration-300 ease-linear lg:static lg:translate-x-0"
+    :class="{
+        'w-[290px]': mobileSidebarOpen || sidebarExpanded || sidebarHovered,
+        'w-[90px]': !mobileSidebarOpen && !sidebarExpanded && !sidebarHovered,
+        'translate-x-0': mobileSidebarOpen,
+        '-translate-x-full': !mobileSidebarOpen
+    }"
+    @mouseenter="sidebarHovered = true"
+    @mouseleave="sidebarHovered = false"
+    @keydown.escape.window="mobileSidebarOpen = false">
+
+    <div class="bc-sidebar-header flex h-16 items-center justify-between px-6">
+        <a href="{{ url_for('tenant.dashboard', tenant_slug=tenant.slug if tenant else 'admin-corp') }}" class="flex items-center gap-3">
+            <div class="bc-brand-icon">
+                <svg class="h-5 w-5 fill-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
+                </svg>
+            </div>
+            <span class="bc-brand-title" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Backup Center</span>
+        </a>
+
+        <button class="block text-[var(--text-muted)] transition-colors hover:text-white lg:hidden" @click="mobileSidebarOpen = !mobileSidebarOpen">
+            <i data-lucide="x" class="h-6 w-6"></i>
+        </button>
+    </div>
+
+    <div class="no-scrollbar flex flex-1 flex-col overflow-y-auto">
+        <nav class="space-y-8 px-4 py-6" @click="if (window.innerWidth < 1024 && $event.target.closest('a')) { mobileSidebarOpen = false; }">
+            {% set tenant_id = tenant_slug if tenant_slug else (tenant.slug if tenant else 'public') %}
+            {% set current_endpoint = request.endpoint|default('') %}
+            {% set is_dashboard = 'tenant.dashboard' in current_endpoint %}
+            {% set is_operations = 'tenant_operations' in current_endpoint %}
+            {% set is_devices = 'tenant_devices' in current_endpoint %}
+            {% set is_backups = 'tenant_backups' in current_endpoint or 'tenant_compare' in current_endpoint %}
+            {% set is_devices_backups = is_devices or is_backups %}
+            {% set is_reports = 'tenant_reports' in current_endpoint %}
+            {% set is_settings_general = current_endpoint == 'tenant_settings.general_settings' %}
+            {% set is_settings_profile = current_endpoint == 'tenant_settings.profile' %}
+            {% set is_settings_notifications = current_endpoint == 'tenant_settings.notifications' %}
+            {% set is_settings_reports = current_endpoint == 'tenant_settings.reports' %}
+            {% set is_settings_api_tokens = 'api_tokens' in current_endpoint %}
+            {% set is_settings = is_settings_general or is_settings_profile or is_settings_notifications or is_settings_reports or is_settings_api_tokens %}
+            {% set is_users = 'tenant_users' in current_endpoint %}
+            {% set is_activity = 'tenant_activity' in current_endpoint %}
+            {% set is_activity_live = is_activity and request.args.get('live') == '1' %}
+            {% set is_schedules = 'tenant_schedules' in current_endpoint %}
+            {% set is_billing = 'billing' in current_endpoint %}
+            {% set role = session.get('user_role') %}
+            {% set is_admin_role = role in ['super_admin', 'tenant_owner', 'tenant_admin'] %}
+            {% set is_owner_role = role in ['super_admin', 'tenant_owner'] %}
+
+            {% if superadmin_return_url %}
+            <div>
+                <a href="{{ superadmin_return_url }}" class="bc-nav-link" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'" style="border-color: rgba(59,130,246,.25); background: rgba(59,130,246,.14); color: #93c5fd;">
+                    <i data-lucide="arrow-left-right" class="bc-nav-icon" style="color: #93c5fd;"></i>
+                    <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">{{ superadmin_return_label }}</span>
+                </a>
+            </div>
+            {% endif %}
+
+            <div>
+                <h3 class="bc-section-title" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">PRINCIPAL</h3>
+                <h3 class="bc-section-title text-center" x-show="!mobileSidebarOpen && !sidebarExpanded && !sidebarHovered">•••</h3>
+                <ul class="bc-nav-list">
+                    <li>
+                        <a href="{{ url_for('tenant.dashboard', tenant_slug=tenant_id) }}" class="bc-nav-link {% if is_dashboard %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'">
+                            <i data-lucide="layout-dashboard" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant_id) }}" class="bc-nav-link {% if is_operations %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'">
+                            <i data-lucide="layers" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Grupos</span>
+                        </a>
+                    </li>
+                    <li x-data="{ open: {{ 'true' if is_devices_backups else 'false' }} }">
+                        <button @click="open = !open" class="bc-nav-link w-full" :class="[(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center', {% if is_devices_backups %}'is-active'{% else %}''{% endif %}]">
+                            <i data-lucide="hard-drive-download" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Dispositivos e Backups</span>
+                            <i data-lucide="chevron-down" class="ml-auto h-4 w-4 text-[var(--text-muted)] transition-transform" :class="open ? 'rotate-180' : ''" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered"></i>
+                        </button>
+                        <ul x-show="open && (mobileSidebarOpen || sidebarExpanded || sidebarHovered)" x-cloak class="bc-submenu">
+                            <li><a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant_id) }}" class="bc-sub-link {% if 'tenant_devices' in current_endpoint %}is-active{% endif %}">Todos os dispositivos</a></li>
+                            <li><a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant_id) }}" class="bc-sub-link {% if 'tenant_backups' in current_endpoint %}is-active{% endif %}">Histórico</a></li>
+                            <li><a href="{{ url_for('tenant_backups.failed_devices', tenant_slug=tenant_id) }}" class="bc-sub-link {% if current_endpoint == 'tenant_backups.failed_devices' %}is-active{% endif %}">Falhas</a></li>
+                            <li><a href="{{ url_for('tenant_compare.select_device', tenant_slug=tenant_id) }}" class="bc-sub-link {% if 'tenant_compare' in current_endpoint %}is-active{% endif %}">Comparar versões</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class="bc-section-title" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">MONITORAMENTO</h3>
+                <ul class="bc-nav-list">
+                    <li>
+                        <a href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant_id, live=1, view='logs') }}" class="bc-nav-link {% if is_activity_live %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? 'justify-between' : 'justify-center'">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <i data-lucide="activity" class="bc-nav-icon"></i>
+                                <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Tempo real e alertas</span>
+                            </div>
+                        </a>
+                    </li>
+                    <li x-data="{ open: {{ 'true' if is_reports else 'false' }} }">
+                        <button @click="open = !open" class="bc-nav-link w-full" :class="[(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center', {% if is_reports %}'is-active'{% else %}''{% endif %}]">
+                            <i data-lucide="file-bar-chart" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Relatórios</span>
+                            <i data-lucide="chevron-down" class="ml-auto h-4 w-4 text-[var(--text-muted)] transition-transform" :class="open ? 'rotate-180' : ''" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered"></i>
+                        </button>
+                        <ul x-show="open && (mobileSidebarOpen || sidebarExpanded || sidebarHovered)" x-cloak class="bc-submenu">
+                            <li><a href="{{ url_for('tenant_reports.daily', tenant_slug=tenant_id) }}" class="bc-sub-link {% if current_endpoint == 'tenant_reports.daily' %}is-active{% endif %}">Diário</a></li>
+                            <li><a href="{{ url_for('tenant_reports.weekly', tenant_slug=tenant_id) }}" class="bc-sub-link {% if current_endpoint == 'tenant_reports.weekly' %}is-active{% endif %}">Semanal</a></li>
+                            <li><a href="{{ url_for('tenant_reports.monthly', tenant_slug=tenant_id) }}" class="bc-sub-link {% if current_endpoint == 'tenant_reports.monthly' %}is-active{% endif %}">Mensal</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class="bc-section-title" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">SISTEMA</h3>
+                <ul class="bc-nav-list">
+                    <li x-data="{ open: {{ 'true' if is_settings else 'false' }} }">
+                        <button @click="open = !open" class="bc-nav-link w-full" :class="[(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center', {% if is_settings %}'is-active'{% else %}''{% endif %}]">
+                            <i data-lucide="settings" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Configurações</span>
+                            <i data-lucide="chevron-down" class="ml-auto h-4 w-4 text-[var(--text-muted)] transition-transform" :class="open ? 'rotate-180' : ''" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered"></i>
+                        </button>
+                        <ul x-show="open && (mobileSidebarOpen || sidebarExpanded || sidebarHovered)" x-cloak class="bc-submenu">
+                            {% if is_admin_role %}
+                            <li><a href="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant_id) }}" class="bc-sub-link {% if is_settings_general %}is-active{% endif %}">Geral</a></li>
+                            {% endif %}
+                            <li><a href="{{ url_for('tenant_settings.profile', tenant_slug=tenant_id) }}" class="bc-sub-link {% if is_settings_profile %}is-active{% endif %}">Perfil</a></li>
+                            <li><a href="{{ url_for('tenant_settings.notifications', tenant_slug=tenant_id) }}" class="bc-sub-link {% if is_settings_notifications %}is-active{% endif %}">Notificações</a></li>
+                            <li><a href="{{ url_for('tenant_settings.reports', tenant_slug=tenant_id) }}" class="bc-sub-link {% if is_settings_reports %}is-active{% endif %}">Relatórios</a></li>
+                            {% if is_admin_role %}
+                            <li><a href="{{ url_for('api_tokens.list_tokens', tenant_slug=tenant_id) }}" class="bc-sub-link {% if is_settings_api_tokens %}is-active{% endif %}">API Tokens</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+
+                    <li>
+                        <a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant_id) }}" class="bc-nav-link {% if is_users %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'">
+                            <i data-lucide="users" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Usuários</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant_id) }}" class="bc-nav-link {% if is_activity and not is_activity_live %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'">
+                            <i data-lucide="scroll-text" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Logs de Atividade</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ url_for('tenant_schedules.list_schedules', tenant_slug=tenant_id) }}" class="bc-nav-link {% if is_schedules %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'">
+                            <i data-lucide="calendar" class="bc-nav-icon"></i>
+                            <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Agendamentos</span>
+                        </a>
+                    </li>
+                    {% if is_owner_role %}
+                    <li>
+                        <a href="{{ url_for('billing.dashboard', tenant_slug=tenant_id) }}" class="bc-nav-link {% if is_billing %}is-active{% endif %}" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? 'justify-between' : 'justify-center'">
+                            <div class="flex min-w-0 items-center gap-3">
+                                <i data-lucide="credit-card" class="bc-nav-icon"></i>
+                                <span class="bc-nav-label" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Assinatura</span>
+                            </div>
+                            <span class="bc-badge-success" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">PRO</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </nav>
+    </div>
+
+    <div class="bc-sidebar-footer p-4">
+        <button @click="sidebarExpanded = !sidebarExpanded" class="bc-sidebar-toggle" :class="(mobileSidebarOpen || sidebarExpanded || sidebarHovered) ? '' : 'justify-center'">
+            <i data-lucide="panel-left-close" class="h-4 w-4" x-show="sidebarExpanded || sidebarHovered"></i>
+            <i data-lucide="panel-left-open" class="h-4 w-4" x-show="!sidebarExpanded && !sidebarHovered"></i>
+            <span class="text-xs font-semibold" x-show="mobileSidebarOpen || sidebarExpanded || sidebarHovered">Recolher menu</span>
+        </button>
+    </div>
+</aside>

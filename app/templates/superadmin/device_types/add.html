@@ -1,0 +1,98 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Novo Tipo de Dispositivo | Super Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page admin-page--narrow admin-page--compact">
+    <div class="admin-page-header">
+        <div class="admin-page-header-copy">
+            <h1 class="admin-page-title">Novo tipo de dispositivo</h1>
+            <p class="admin-page-subtitle">Cadastre script, parametros e padrao de conexao.</p>
+        </div>
+    </div>
+
+    <form method="POST" class="premium-card admin-form-card">
+        {% include 'partials/csrf.html' %}
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+                <label for="name" class="admin-label">Nome</label>
+                <input type="text" name="name" id="name" required
+                    placeholder="Ex: OLT FiberHome"
+                    class="admin-control">
+            </div>
+            <div>
+                <label for="slug" class="admin-label">Slug</label>
+                <input type="text" name="slug" id="slug" required
+                    placeholder="Ex: olt_fiberhome"
+                    class="admin-control">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div class="md:col-span-2">
+                <label for="script_name" class="admin-label">Script</label>
+                <input type="text" name="script_name" id="script_name" required
+                    placeholder="Ex: fiberhome_olt_netmiko.py"
+                    class="admin-control">
+                <p class="admin-help">Arquivo em `app/scripts/backup_scripts/`.</p>
+            </div>
+            <div>
+                <label for="default_port" class="admin-label">Porta padrão</label>
+                <input type="number" name="default_port" id="default_port" value="22" required min="1"
+                    class="admin-control">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+                <label for="category" class="admin-label">Categoria</label>
+                <input type="text" name="category" id="category" value="other" list="device-type-categories"
+                    class="admin-control">
+                <datalist id="device-type-categories">
+                    <option value="olt"></option>
+                    <option value="switch"></option>
+                    <option value="router"></option>
+                    <option value="firewall"></option>
+                    <option value="server"></option>
+                    <option value="other"></option>
+                </datalist>
+            </div>
+            <div>
+                <label for="required_parameters" class="admin-label">Parâmetros extras</label>
+                <input type="text" name="required_parameters" id="required_parameters"
+                    placeholder="Ex: enable_password, secret"
+                    class="admin-control">
+            </div>
+        </div>
+
+        <div>
+            <label for="description" class="admin-label">Descrição</label>
+            <textarea name="description" id="description" rows="3"
+                class="admin-control"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label class="admin-toggle-card">
+                <input type="checkbox" name="use_telnet" class="h-4 w-4 rounded border-[var(--card-border)]">
+                Usar Telnet por padrão
+            </label>
+            <label class="admin-toggle-card">
+                <input type="checkbox" name="is_active" checked class="h-4 w-4 rounded border-[var(--card-border)]">
+                Tipo ativo
+            </label>
+        </div>
+
+        <div class="admin-form-actions">
+            <a href="{{ url_for('superadmin_device_types.list_types') }}"
+                class="rounded-lg border border-[var(--card-border)] px-4 py-2 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                Cancelar
+            </a>
+            <button type="submit"
+                class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                Criar tipo
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

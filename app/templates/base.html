@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Backup Center{% endblock %}</title>
+
+    <script>
+        (function () {
+            const stored = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const isDark = stored ? stored === 'dark' : prefersDark;
+            document.documentElement.classList.toggle('dark', isDark);
+        })();
+    </script>
+
+    <!-- Design System -->
+    <link href="{{ url_for('static', filename='css/output.css') }}?v=20260408-sidebar-v3" rel="stylesheet">
+
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
+        /* ------------------------------------------------------------------
+           THEME & VARIABLES (Premium Light)
+           ------------------------------------------------------------------ */
+        :root {
+            --bg-app: #f8fafc;
+            /* Fundo Off-white/slate-50 */
+            --text-main: #0f172a;
+            /* Texto Escuro/slate-900 */
+            --text-muted: #64748b;
+            /* Texto Suave/slate-500 */
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --card-border: rgba(15, 23, 42, 0.06);
+            --card-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.05);
+            --line-color: #e2e8f0;
+
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #06b6d4;
+            --purple: #8b5cf6;
+            --glass-highlight: rgba(0, 0, 0, 0.03);
+        }
+
+        .dark {
+            --bg-app: #02040a;
+            /* Fundo super escuro (Linear spec) */
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --card-bg: rgba(15, 23, 42, 0.6);
+            --card-border: rgba(255, 255, 255, 0.05);
+            --card-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.8);
+            --line-color: rgba(255, 255, 255, 0.05);
+
+            --primary: #3b82f6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #06b6d4;
+            --purple: #8b5cf6;
+            --glass-highlight: rgba(255, 255, 255, 0.03);
+        }
+
+        body {
+            background-color: var(--bg-app) !important;
+            color: var(--text-main) !important;
+        }
+
+        .premium-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-radius: 16px;
+            color: var(--text-main);
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .admin-page {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            padding-bottom: 1rem;
+        }
+
+        .admin-page--narrow {
+            max-width: 980px;
+        }
+
+        .admin-page--compact {
+            gap: 1.25rem;
+        }
+
+        .admin-page-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem 1.25rem;
+        }
+
+        .admin-page-header-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+
+        .admin-page-header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .admin-page-title {
+            font-size: 1.9rem;
+            line-height: 1.1;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+
+        .admin-page-subtitle {
+            max-width: 54rem;
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: var(--text-muted);
+        }
+
+        .admin-card-grid {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .admin-summary-strip {
+            width: 100%;
+            max-width: var(--admin-summary-max, 1160px);
+            margin: 0 auto;
+        }
+
+        .admin-summary-strip--wide {
+            --admin-summary-max: 1280px;
+        }
+
+        .admin-summary-strip--full {
+            --admin-summary-max: 1440px;
+        }
+
+        .admin-filter-card {
+            padding: 1rem;
+        }
+
+        .admin-inline-filters {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: 1fr;
+        }
+
+        .admin-inline-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        @media (min-width: 1280px) {
+            .admin-inline-filters {
+                grid-template-columns: var(--admin-filter-columns, 1fr);
+                align-items: center;
+            }
+
+            .admin-inline-actions {
+                justify-content: flex-end;
+            }
+        }
+
+        .admin-table {
+            min-width: 100%;
+            font-size: 0.875rem;
+        }
+
+        .admin-table th {
+            padding: 0.8rem 0.95rem;
+            border-bottom: 1px solid var(--line-color);
+            font-size: 0.69rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            text-align: left;
+        }
+
+        .admin-table td {
+            padding: 0.9rem 0.95rem;
+            border-bottom: 1px solid var(--line-color);
+            vertical-align: top;
+            color: var(--text-main);
+        }
+
+        .admin-table tbody tr:hover {
+            background: rgba(148, 163, 184, 0.06);
+        }
+
+        .admin-table-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
+
+        .admin-form-card {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .admin-form-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--line-color);
+        }
+
+        .admin-form-heading {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .admin-form-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .admin-form-copy {
+            font-size: 0.82rem;
+            line-height: 1.5;
+            color: var(--text-muted);
+        }
+
+        .admin-form-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            padding-top: 0.25rem;
+        }
+
+        .admin-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .admin-help {
+            margin-top: 0.35rem;
+            font-size: 0.75rem;
+            line-height: 1.45;
+            color: var(--text-muted);
+        }
+
+        .admin-control {
+            display: block;
+            width: 100%;
+            margin-top: 0.4rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
+            color: var(--text-main);
+            padding: 0.72rem 0.9rem;
+            font-size: 0.875rem;
+            line-height: 1.4;
+        }
+
+        .admin-control:focus {
+            outline: none;
+            border-color: rgba(59, 130, 246, 0.55);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+        }
+
+        .admin-toggle-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border: 1px solid var(--card-border);
+            border-radius: 0.85rem;
+            background: rgba(148, 163, 184, 0.08);
+            padding: 0.9rem 1rem;
+            color: var(--text-main);
+        }
+
+        .admin-toggle-card input[type="checkbox"],
+        .admin-toggle-card input[type="radio"] {
+            flex-shrink: 0;
+        }
+
+        /* ------------------------------------------------------------------
+           SIDEBAR V2 (Tenant)
+           ------------------------------------------------------------------ */
+        /* Garante que a sidebar reserve espaço no layout flex ANTES do Alpine.js inicializar */
+        @media (min-width: 1024px) {
+            .bc-sidebar {
+                width: 290px;
+            }
+        }
+
+        .bc-sidebar {
+            background: var(--card-bg);
+            border-color: var(--card-border);
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .bc-sidebar-header {
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .bc-brand-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0.6rem;
+            background: linear-gradient(135deg, #6366f1, #4338ca);
+            box-shadow: 0 10px 20px rgba(67, 56, 202, 0.35);
+        }
+
+        .bc-brand-title {
+            color: var(--text-main);
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .bc-section-title {
+            padding: 0 0.75rem;
+            margin-bottom: 0.7rem;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .bc-nav-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .bc-nav-link {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border-radius: 0.6rem;
+            border: 1px solid transparent;
+            padding: 0.62rem 0.75rem;
+            color: var(--text-muted);
+            font-size: 0.835rem;
+            line-height: 1.2rem;
+            transition: all 0.18s ease;
+        }
+
+        .bc-nav-link:hover {
+            background: rgba(30, 41, 59, 0.5);
+            border-color: rgba(71, 85, 105, 0.5);
+            color: var(--text-main);
+        }
+
+        .bc-nav-link.is-active {
+            background: rgba(79, 70, 229, 0.16);
+            border-color: rgba(99, 102, 241, 0.28);
+            color: #a5b4fc;
+        }
+
+        .bc-nav-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: var(--text-muted);
+            transition: color 0.18s ease;
+        }
+
+        .bc-nav-link:hover .bc-nav-icon {
+            color: var(--text-main);
+        }
+
+        .bc-nav-link.is-active .bc-nav-icon {
+            color: #a5b4fc;
+        }
+
+        .bc-nav-label {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bc-submenu {
+            margin-top: 0.35rem;
+            margin-left: 2.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        .bc-sub-link {
+            display: block;
+            border-radius: 0.5rem;
+            padding: 0.45rem 0.65rem;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.18s ease;
+        }
+
+        .bc-sub-link:hover {
+            background: rgba(30, 41, 59, 0.45);
+            color: var(--text-main);
+        }
+
+        .bc-sub-link.is-active {
+            background: rgba(79, 70, 229, 0.14);
+            color: #c7d2fe;
+        }
+
+        .bc-badge-danger {
+            border: 1px solid rgba(244, 63, 94, 0.22);
+            background: rgba(244, 63, 94, 0.12);
+            color: #fb7185;
+            border-radius: 999px;
+            padding: 0.1rem 0.45rem;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .bc-badge-success {
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            background: rgba(16, 185, 129, 0.12);
+            color: #34d399;
+            border-radius: 0.35rem;
+            padding: 0.1rem 0.45rem;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .bc-sidebar-footer {
+            border-top: 1px solid var(--card-border);
+            background: var(--card-bg);
+        }
+
+        .bc-sidebar-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            border-radius: 0.6rem;
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            background: var(--card-bg);
+            padding: 0.62rem 0.8rem;
+            color: var(--text-muted);
+            transition: all 0.18s ease;
+        }
+
+        .bc-sidebar-toggle:hover {
+            color: #ffffff;
+            border-color: rgba(71, 85, 105, 0.9);
+            background: var(--card-bg);
+        }
+
+        .bc-table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .bc-table-scroll>table {
+            min-width: max-content;
+        }
+
+        @media (max-width: 768px) {
+            .admin-page {
+                gap: 1rem;
+            }
+
+            .admin-page-title {
+                font-size: 1.5rem;
+            }
+
+            .admin-page-header-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .admin-form-card {
+                padding: 1rem;
+            }
+
+            .admin-form-actions {
+                justify-content: stretch;
+            }
+
+            .admin-form-actions>* {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body class="font-outfit antialiased" x-data="{
+          sidebarExpanded: localStorage.getItem('sidebar-expanded') !== 'false',
+          sidebarHovered: false,
+          mobileSidebarOpen: false
+      }" x-init="
+          $watch('sidebarExpanded', value => localStorage.setItem('sidebar-expanded', value));
+          $watch('mobileSidebarOpen', value => {
+              if (window.innerWidth < 1024) {
+                  document.body.classList.toggle('overflow-hidden', value);
+              } else {
+                  document.body.classList.remove('overflow-hidden');
+              }
+          });
+          window.addEventListener('resize', () => {
+              if (window.innerWidth >= 1024) {
+                  mobileSidebarOpen = false;
+                  document.body.classList.remove('overflow-hidden');
+              }
+          });
+      ">
+
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- Sidebar -->
+        {% if request.endpoint and ('tenant' in request.endpoint or 'superadmin' in request.endpoint or 'billing' in
+        request.endpoint) %}
+        {% if session.get('user_role') == 'super_admin' and request.endpoint and request.endpoint.startswith('superadmin_') %}
+        {% include 'partials/sidebar_superadmin.html' %}
+        {% else %}
+        {% include 'partials/sidebar.html' %}
+        {% endif %}
+        {% endif %}
+
+        <!-- Mobile Sidebar Overlay -->
+        {% if request.endpoint and ('tenant' in request.endpoint or 'superadmin' in request.endpoint or 'billing' in
+        request.endpoint) %}
+        <div x-cloak x-show="mobileSidebarOpen" x-transition.opacity
+            class="fixed inset-0 z-40 bg-[var(--bg-app)]/60 lg:hidden"
+            @click="mobileSidebarOpen = false"></div>
+        {% endif %}
+
+        <!-- Content Area -->
+        <div
+            class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out">
+
+
+            <!-- Header -->
+            {% if request.endpoint and ('tenant' in request.endpoint or 'superadmin' in request.endpoint or 'billing' in
+            request.endpoint) %}
+            {% include 'partials/navbar.html' %}
+            {% endif %}
+
+            <!-- Main Content -->
+            <main class="flex flex-col grow">
+                <div class="flex-1 p-4 md:p-5 xl:p-6">
+                    <!-- Flash Messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    <div class="mb-6 flex flex-col gap-4">
+                        {% for category, message in messages %}
+                        <!-- Success -->
+                        {% if category == 'success' %}
+                        <div class="flex items-center w-full p-4 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            role="alert">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="check-circle" class="w-5 h-5"></i>
+                            </div>
+                            <div class="ml-3 text-sm font-medium">
+                                {{ message }}
+                            </div>
+                            <button type="button"
+                                class="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-emerald-400 p-1.5 hover:bg-emerald-200 inline-flex items-center justify-center h-8 w-8 dark:hover:bg-emerald-500/20 transition-colors"
+                                data-dismiss-target="#alert-{{ loop.index }}" aria-label="Close"
+                                onclick="this.parentElement.remove()">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- Error -->
+                        {% elif category == 'error' %}
+                        <div class="flex items-center w-full p-4 rounded-lg bg-red-50 text-red-800 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                            role="alert">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                            </div>
+                            <div class="ml-3 text-sm font-medium">
+                                {{ message }}
+                            </div>
+                            <button type="button"
+                                class="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-red-400 p-1.5 hover:bg-red-200 inline-flex items-center justify-center h-8 w-8 dark:hover:bg-red-500/20 transition-colors"
+                                aria-label="Close" onclick="this.parentElement.remove()">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- Warning -->
+                        {% elif category == 'warning' %}
+                        <div class="flex items-center w-full p-4 rounded-lg bg-orange-50 text-orange-800 border border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20"
+                            role="alert">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                            </div>
+                            <div class="ml-3 text-sm font-medium">
+                                {{ message }}
+                            </div>
+                            <button type="button"
+                                class="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-orange-400 p-1.5 hover:bg-orange-200 inline-flex items-center justify-center h-8 w-8 dark:hover:bg-orange-500/20 transition-colors"
+                                aria-label="Close" onclick="this.parentElement.remove()">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- Info / Default -->
+                        {% else %}
+                        <div class="flex items-center w-full p-4 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20"
+                            role="alert">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="info" class="w-5 h-5"></i>
+                            </div>
+                            <div class="ml-3 text-sm font-medium">
+                                {{ message }}
+                            </div>
+                            <button type="button"
+                                class="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-blue-400 p-1.5 hover:bg-blue-200 inline-flex items-center justify-center h-8 w-8 dark:hover:bg-blue-500/20 transition-colors"
+                                aria-label="Close" onclick="this.parentElement.remove()">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+
+                    {% if tenant_billing_alert %}
+                    <div class="mb-6">
+                        <div class="flex items-start w-full p-4 rounded-lg bg-orange-50 text-orange-800 border border-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/20">
+                            <div class="flex-shrink-0 mt-0.5">
+                                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                            </div>
+                            <div class="ml-3 text-sm font-medium">
+                                <p>{{ tenant_billing_alert.message }}</p>
+                                <a href="{{ tenant_billing_url }}"
+                                    class="mt-1 inline-flex items-center text-xs font-semibold underline underline-offset-2 hover:opacity-80">
+                                    Ir para faturamento
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% block content %}{% endblock %}
+                </div>
+
+                <!-- Footer -->
+                {% if request.endpoint and ('tenant' in request.endpoint or 'superadmin' in request.endpoint or
+                'billing' in request.endpoint) %}
+                {% include 'partials/footer.html' %}
+                {% endif %}
+            </main>
+
+        </div>
+
+    </div>
+
+    <!-- Initialize Icons -->
+    <script>
+        lucide.createIcons();
+
+        window.__confirmDangerousForm = function (formEl) {
+            if (!formEl) return true;
+            if (formEl.dataset.confirmed === '1') return true;
+            const message = formEl.dataset.confirm;
+            if (!message) return true;
+            const ok = window.confirm(message);
+            if (!ok) return false;
+            formEl.dataset.confirmed = '1';
+            return true;
+        };
+
+        document.addEventListener('keydown', function (event) {
+            const searchInput = document.getElementById('superadmin-global-search');
+            if (!searchInput) {
+                return;
+            }
+            const isShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+            if (!isShortcut) {
+                return;
+            }
+            event.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+        });
+
+        // Auto-dismiss flash messages after 5 seconds
+        document.addEventListener('DOMContentLoaded', function () {
+            const alerts = document.querySelectorAll('[role="alert"]');
+            alerts.forEach((alert, index) => {
+                setTimeout(() => {
+                    alert.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    alert.style.opacity = '0';
+                    alert.style.transform = 'translateY(-10px)';
+                    setTimeout(() => alert.remove(), 500);
+                }, 5000 + (index * 500)); // Stagger the removal - increased to 5 seconds
+            });
+
+            document.addEventListener('submit', function (event) {
+                const form = event.target;
+                if (!(form instanceof HTMLFormElement)) {
+                    return;
+                }
+                if (!form.dataset.confirm) {
+                    return;
+                }
+                if (!window.__confirmDangerousForm(form)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }, true);
+
+            const alreadyResponsiveSelector = '.overflow-x-auto, .act-table-wrap, .dash-table-wrap, .dev-table-wrap, .sch-table-wrap, .bc-table-scroll';
+            const contentTables = document.querySelectorAll('main table');
+
+            contentTables.forEach((table) => {
+                if (table.closest(alreadyResponsiveSelector)) {
+                    return;
+                }
+                const parent = table.parentElement;
+                if (!parent) {
+                    return;
+                }
+                const wrapper = document.createElement('div');
+                wrapper.className = 'bc-table-scroll';
+                parent.insertBefore(wrapper, table);
+                wrapper.appendChild(table);
+            });
+        });
+    </script>
+</body>
+
+</html>

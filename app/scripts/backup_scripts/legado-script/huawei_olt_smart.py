@@ -1,0 +1,115 @@
+# /srv/mikrotik_manager/backup_scripts/huawei_olt_smart.py
+# Versão final com lógica de fallback à prova de falhas para paginação.
+
+import re
+from typing import Tuple
+import pexpect
+from script_helpers import BackupLogger, prepare_backup_path
+
+def realizar_backup(ip: str, usuario: str, porta: int, nome_provedor: str, nome_tipo_equip: str,
+                    nome_dispositivo: str, parametros: dict = None, task_id: str = None, 
+                    socketio_instance=None, backup_base_path: str = None) -> Tuple[bool, str, str]:
+    
+    logger = BackupLogger(nome_dispositivo, task_id, socketio_instance)
+    logger.emit(f"Iniciando backup inteligente para Huawei OLT: {nome_dispositivo} ({ip})...")
+
+    parametros = parametros or {}
+    password = parametros.get('password')
+
+    if not password:
+        msg = "Senha não fornecida."
+        logger.emit(msg, 'error')
+        return (False, msg, None)
+
+    caminho_local_completo = prepare_backup_path(
+        backup_base_path,
+        nome_provedor, nome_tipo_equip, nome_dispositivo, 'cfg'
+    )
+
+    use_telnet = bool(parametros.get('use_telnet'))
+    child = None
+    prompt_user = r'>\s*$'
+    prompt_priv = r'#\s*$'
+    prompt_config = r'\(config\)#\s*$'
+
+    try:
+        if use_telnet:
+            logger.emit(f"Conectando a {ip}:{porta} via TELNET...")
+            command = f"telnet {ip} {porta}"
+            child = pexpect.spawn(command, timeout=40, encoding='utf-8')
+            child.expect(r'(?i)(Username|login):')
+            child.sendline(usuario)
+        else: # SSH
+            logger.emit(f"Conectando a {ip}:{porta} via SSH...")
+            command = f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {usuario}@{ip} -p {porta}"
+            child = pexpect.spawn(command, timeout=40, encoding='utf-8')
+        
+        child.expect(r'(?i)password:')
+        logger.emit("Enviando senha...")
+        child.sendline(password)
+        
+        child.expect(prompt_user, timeout=20)
+        logger.emit("Login bem-sucedido.", 'success')
+
+        logger.emit("Entrando em modo privilegiado (enable)...")
+        child.sendline('enable')
+        child.expect(prompt_priv, timeout=20)
+        logger.emit("Modo privilegiado ativado.", 'success')
+        
+        # --- LÓGICA DE PAGINAÇÃO À PROVA DE FALHAS ---
+        logger.emit("Desativando paginação (Tentativa 1: screen-length)...")
+        child.sendline('screen-length 0 temporary')
+        child.expect(prompt_priv, timeout=15)
+        # Captura o que foi respondido ANTES do prompt
+        output_before_prompt = child.before
+
+        # Analisa a resposta
+        if 'Unknown command' in output_before_prompt:
+            logger.emit("'screen-length' não suportado. Tentativa 2: scroll...", 'warning')
+            child.sendline('scroll')
+            child.expect(r':', timeout=10)
+            child.sendline('\n')
+            child.expect(prompt_priv, timeout=10)
+            logger.emit("Paginação desativada com 'scroll'.", 'success')
+        else:
+            logger.emit("Paginação desativada com 'screen-length'.", 'success')
+
+        logger.emit("Entrando em modo de configuração...")
+        child.sendline('config')
+        child.expect(prompt_config, timeout=20)
+        logger.emit("Modo de configuração ativado.", 'success')
+        
+        logger.emit("Ativando modo de saída original (mmi-mode original-output)...")
+        child.sendline('mmi-mode original-output')
+        child.expect(prompt_config, timeout=20)
+        logger.emit("Modo MMI ativado.", 'success')
+        
+        logger.emit("Executando 'display current-configuration'...")
+        child.sendline('display current-configuration')
+        child.expect(r':', timeout=30)
+        child.sendline('\n')
+        
+        child.expect(prompt_config, timeout=300)
+        full_config = child.before
+        logger.emit("Configuração recebida com sucesso.")
+
+        logger.emit("Restaurando modo MMI padrão...")
+        child.sendline('undo mmi-mode original-output')
+        child.expect(prompt_config, timeout=20)
+
+        with open(caminho_local_completo, 'w', encoding='utf-8') as f:
+            f.write(full_config)
+        logger.emit(f"Arquivo de backup salvo em: {caminho_local_completo}", "success")
+        
+        msg = f"Backup de '{nome_dispositivo}' concluído com sucesso!"
+        logger.emit(msg, 'success')
+        return (True, msg, caminho_local_completo)
+        
+    except Exception as e:
+        error_msg = f"Falha crítica no script inteligente: {e}"
+        logger.emit(error_msg, 'error')
+        return (False, error_msg, None)
+    finally:
+        if child and child.isalive():
+            child.close()
+            logger.emit("Conexão fechada.")

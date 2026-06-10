@@ -1,0 +1,28 @@
+{% extends "base_redesign.html" %}
+{% block title %}Configurações · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Configurações</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/settings.py general_settings): tenant #}
+{% set role = session.get('user_role') %}
+{% set can_manage_admin = role in ['super_admin','tenant_owner','tenant_admin'] %}
+<div class="wrap">
+  <div class="page-h"><div class="eyebrow">Conta · {{ tenant.name }}</div><h1>Configurações</h1><p>Informações da organização e preferências de acesso.</p></div>
+  <div class="set-grid" style="display:grid;grid-template-columns:240px 1fr;gap:26px;align-items:start">
+    {% set settings_section = 'general' %}{% include 'partials/settings_nav_redesign.html' %}
+    <form method="POST" action="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant.slug) }}">
+      {% include 'partials/csrf.html' %}
+      <div class="panel panel-pad" style="margin-bottom:22px">
+        <div style="font-family:var(--serif);font-weight:400;font-size:21px;margin-bottom:18px">Informações da organização</div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div><label class="lbl">Nome da empresa</label><input type="text" name="name" value="{{ tenant.name }}" class="inp" required></div>
+          <div><label class="lbl">Slug</label><input type="text" value="{{ tenant.slug }}" class="inp mono" readonly title="O slug não pode ser alterado." style="opacity:.6;cursor:not-allowed"></div>
+          <div><label class="lbl">E-mail de contato</label><input type="email" name="email" value="{{ tenant.email or '' }}" class="inp"></div>
+        </div>
+      </div>
+      {% if can_manage_admin %}<div class="row" style="display:flex;justify-content:flex-end"><button type="submit" class="btn btn-pine"><i data-lucide="check"></i>Salvar alterações</button></div>{% endif %}
+    </form>
+  </div>
+</div>
+<style>@media (max-width:860px){ .set-grid{grid-template-columns:1fr !important} }</style>
+{% endblock %}

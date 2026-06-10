@@ -1,0 +1,204 @@
+{% extends "base_redesign.html" %}
+{% block title %}Novo dispositivo · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}">Dispositivos</a><i data-lucide="chevron-right"></i><b>Novo dispositivo</b>{% endblock %}
+
+{% block head %}
+<style>
+  .hidden{display:none !important}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.frow{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/devices.py add_device): tenant, device_types, groups, type_metadata #}
+{% set has_groups = groups and (groups|length > 0) %}
+<div class="wrap" style="max-width:900px">
+  <div class="page-h head-row" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+    <div><div class="eyebrow">Dispositivos</div><h1>Novo dispositivo</h1><p>Cadastre o equipamento e selecione o tipo correto para usar o script de backup adequado.</p></div>
+    <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i>Voltar</a>
+  </div>
+
+  <form action="{{ url_for('tenant_devices.add_device', tenant_slug=tenant.slug) }}" method="POST" style="display:flex;flex-direction:column;gap:22px">
+    {% include 'partials/csrf.html' %}
+
+    <div class="panel panel-pad">
+      <div style="font-family:var(--serif);font-size:19px;margin-bottom:18px">Dados de conexão</div>
+      <div class="frow">
+        <div><label class="lbl">Nome do dispositivo *</label><input type="text" name="name" class="inp" required></div>
+        <div>
+          <label class="lbl">Tipo de equipamento *</label>
+          <select name="device_type_id" id="device_type_id" class="inp" required>
+            <option value="">Selecione o tipo…</option>
+            {% for type in device_types %}
+            <option value="{{ type.id }}" data-default-port="{{ type.default_port or 22 }}" data-use-telnet="{{ '1' if type.use_telnet else '0' }}" data-script="{{ type.script_name or '' }}" data-required-parameters="{{ (type.required_parameters or '')|replace('\n', ',') }}">{{ type.name }}{% if type.category %} ({{ type.category|upper }}){% endif %}</option>
+            {% endfor %}
+          </select>
+          <p id="script-hint" class="faint hidden" style="font-size:11.5px;margin-top:4px"></p>
+        </div>
+        <div><label class="lbl">Endereço IP / Host *</label><input type="text" name="ip_address" class="inp" required></div>
+        <div><label class="lbl">Porta *</label><input type="number" name="port" id="port" value="22" class="inp" required></div>
+        <div>
+          <label class="lbl">Grupo (provedor) *</label>
+          <select name="group_id" class="inp" required>
+            <option value="">Selecione um grupo…</option>
+            {% for group in groups %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}
+          </select>
+          <p class="faint" style="font-size:11.5px;margin-top:4px">Todo dispositivo deve pertencer a um grupo.</p>
+        </div>
+      </div>
+
+      <div class="frow" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+        <div><label class="lbl">Usuário *</label><input type="text" name="username" class="inp" required></div>
+        <div><label class="lbl">Senha *</label><input type="password" name="password" class="inp" required></div>
+      </div>
+
+      <div style="margin-top:16px"><label class="lbl">Descrição</label><textarea name="description" rows="3" class="inp"></textarea></div>
+
+      <label style="display:flex;align-items:center;gap:9px;margin-top:14px;cursor:pointer;font-size:13.5px">
+        <input type="checkbox" name="use_telnet" id="use_telnet" style="width:17px;height:17px;accent-color:var(--pine)">Usar Telnet (legado)
+      </label>
+
+      <div id="extra-parameters-panel" class="hidden" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+        <div style="margin-bottom:14px"><div style="font-weight:600;font-size:14px">Parâmetros extras do script</div><div class="faint" style="font-size:12px">Campos como enable_password, root_password, api_key e segredos de Telnet/enable.</div></div>
+        <div id="extra-parameters-fields" class="frow"></div>
+      </div>
+    </div>
+
+    <div class="panel panel-pad">
+      <div style="font-family:var(--serif);font-size:19px;margin-bottom:14px">Agendamento de backup</div>
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:14px;font-weight:500;margin-bottom:8px">
+        <input type="checkbox" name="backup_scheduled" id="backup_scheduled" checked style="width:18px;height:18px;accent-color:var(--pine)">Ativar backup automático
+      </label>
+      <p class="faint" style="font-size:13px">O dispositivo entra na rotina automática global do tenant. O horário diário é centralizado em <strong>Agendamentos</strong>.</p>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px">
+      <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-pine" {% if not has_groups %}disabled title="Crie um grupo antes de cadastrar dispositivos"{% endif %}><i data-lucide="check"></i>Salvar dispositivo</button>
+    </div>
+  </form>
+
+  {% if not has_groups %}
+  <div style="margin-top:16px;padding:16px;border-radius:12px;border:1px solid var(--care);background:var(--care-soft);color:var(--care)">
+    <div style="font-weight:600;font-size:13.5px">Nenhum grupo ativo encontrado.</div>
+    <div style="font-size:12.5px;margin-top:3px">Crie um grupo primeiro para poder cadastrar dispositivos.</div>
+    <a href="{{ url_for('tenant_groups.add_group', tenant_slug=tenant.slug) }}" class="btn btn-pine btn-sm" style="margin-top:10px"><i data-lucide="plus"></i>Criar grupo</a>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const typeSelect = document.getElementById('device_type_id');
+    const portInput = document.getElementById('port');
+    const telnetCheckbox = document.getElementById('use_telnet');
+    const scriptHint = document.getElementById('script-hint');
+    const extraPanel = document.getElementById('extra-parameters-panel');
+    const extraFields = document.getElementById('extra-parameters-fields');
+    const typeMetadata = {{ type_metadata|tojson }};
+    const zabbixScriptName = "zabbix_backup.py";
+    const zabbixDefaultExclude = "history,history_uint,history_str,history_log,history_text,trends,trends_uint";
+
+    function prettifyLabel(name){ return (name||'').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    function isSensitiveParameter(name){ return /(password|secret|token|key)/i.test(name||''); }
+
+    function renderExtraParameters(typeId) {
+      extraFields.innerHTML = '';
+      const metadata = typeMetadata[typeId] || {};
+      const scriptName = String(metadata.script_name || '').toLowerCase();
+      const isZabbix = scriptName === zabbixScriptName;
+      const params = (metadata.required_parameters || []).filter((item) => {
+        if (isZabbix && item === 'db_type') return false;
+        return !['username','password','ip_address','host','hostname','port','use_telnet'].includes(item);
+      });
+      if (!params.length) { extraPanel.classList.add('hidden'); return; }
+
+      params.forEach((paramName) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-control';
+        const label = document.createElement('label');
+        label.className = 'lbl'; label.setAttribute('for', `extra__${paramName}`); label.textContent = prettifyLabel(paramName);
+        const input = document.createElement('input');
+        input.type = isSensitiveParameter(paramName) ? 'password' : 'text';
+        input.name = `extra__${paramName}`; input.id = `extra__${paramName}`; input.className = 'inp'; input.autocomplete = 'off';
+        input.placeholder = isSensitiveParameter(paramName) ? `Informe ${prettifyLabel(paramName)}` : `Valor de ${prettifyLabel(paramName)}`;
+        input.dataset.extraParamName = paramName; wrapper.dataset.extraParamName = paramName;
+        if (paramName === 'exclude_tables' && !input.value) input.value = zabbixDefaultExclude;
+        const help = document.createElement('p'); help.className = 'faint'; help.style.fontSize = '11.5px'; help.style.marginTop = '4px';
+        help.textContent = isSensitiveParameter(paramName) ? 'Segredo adicional usado pelo script.' : 'Parâmetro adicional exigido pelo script deste tipo.';
+        wrapper.appendChild(label); wrapper.appendChild(input); wrapper.appendChild(help); extraFields.appendChild(wrapper);
+      });
+
+      if (isZabbix) {
+        const modeBox = document.createElement('div');
+        modeBox.style.gridColumn = '1 / -1';
+        modeBox.style.cssText += 'border:1px solid var(--pine);background:var(--pine-soft);border-radius:12px;padding:16px';
+        modeBox.innerHTML = `
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <div style="font-weight:600;font-size:13.5px;color:var(--pine-deep)">Credenciais do banco Zabbix</div>
+              <div style="font-size:11.5px;color:var(--ink-2)">No modo automático, DBName/DBUser/DBPassword serão obtidos no momento do backup via zabbix_server.conf.</div>
+            </div>
+            <div>
+              <div class="lbl" style="margin-bottom:6px">Banco de dados</div>
+              <div style="display:flex;gap:16px;font-size:13.5px">
+                <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_type" value="postgres" checked style="accent-color:var(--pine)">PostgreSQL</label>
+                <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_type" value="mariadb" style="accent-color:var(--pine)">MariaDB</label>
+              </div>
+            </div>
+            <div style="display:flex;gap:18px;font-size:13.5px">
+              <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_credentials_mode" value="automatic" checked style="accent-color:var(--pine)">Automático</label>
+              <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_credentials_mode" value="manual" style="accent-color:var(--pine)">Manual</label>
+            </div>
+            <p id="zabbix-autodiscovery-status" style="font-size:11.5px;color:var(--ink-2)">Modo automático ativo: credenciais do banco ocultas e descoberta feita em tempo de execução.</p>
+          </div>`;
+        extraFields.prepend(modeBox);
+      }
+
+      extraPanel.classList.remove('hidden');
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      if (isZabbix) setupZabbixControls();
+    }
+
+    function zabbixField(paramName){ return document.querySelector(`#extra-parameters-fields input[name="extra__${paramName}"]`); }
+
+    function setupZabbixControls() {
+      const statusEl = document.getElementById('zabbix-autodiscovery-status');
+      const modeInputs = document.querySelectorAll('input[name="extra__db_credentials_mode"]');
+      const dbFieldNames = ['db_name','db_user','db_password'];
+      function currentMode(){ const c = document.querySelector('input[name="extra__db_credentials_mode"]:checked'); return c ? c.value : 'automatic'; }
+      function updateModeUi() {
+        const automatic = currentMode() === 'automatic';
+        dbFieldNames.forEach((name) => {
+          const input = zabbixField(name); if (!input) return;
+          const wrapper = input.closest('.form-control'); if (wrapper) wrapper.classList.toggle('hidden', automatic);
+          input.disabled = automatic;
+          input.placeholder = automatic ? '' : (name === 'db_password' ? 'Informe Db Password' : `Valor de ${prettifyLabel(name)}`);
+        });
+        if (statusEl) statusEl.textContent = automatic
+          ? 'Modo automático ativo: credenciais do banco ocultas e descoberta feita em tempo de execução.'
+          : 'Modo manual ativo: informe DBName/DBUser/DBPassword para usar no backup.';
+      }
+      modeInputs.forEach((el) => el.addEventListener('change', updateModeUi));
+      updateModeUi();
+    }
+
+    function applyTypeDefaults() {
+      const selected = typeSelect.options[typeSelect.selectedIndex];
+      if (!selected || !selected.value) { scriptHint.classList.add('hidden'); renderExtraParameters(null); return; }
+      const defaultPort = selected.dataset.defaultPort;
+      const useTelnet = selected.dataset.useTelnet === '1';
+      const scriptName = selected.dataset.script || '';
+      if (defaultPort) portInput.value = defaultPort;
+      telnetCheckbox.checked = useTelnet;
+      if (scriptName) { scriptHint.textContent = `Script de backup: ${scriptName}`; scriptHint.classList.remove('hidden'); }
+      else scriptHint.classList.add('hidden');
+      renderExtraParameters(selected.value);
+    }
+
+    typeSelect.addEventListener('change', applyTypeDefaults);
+    applyTypeDefaults();
+  });
+</script>
+{% endblock %}

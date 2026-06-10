@@ -1,0 +1,252 @@
+{% extends "base_redesign.html" %}
+{% block title %}Visão geral · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Visão geral</b>{% endblock %}
+
+{% block head %}
+<style>
+  /* Dashboard — design sistema_2 (Quiet Operations) */
+  .hero { display: grid; grid-template-columns: 1.5fr 1fr; gap: 8px; align-items: stretch; overflow: hidden; margin-bottom: 22px; }
+  @media (max-width: 900px){ .hero { grid-template-columns: 1fr; } }
+  .hero-l { padding: 34px 36px; }
+  .hero-l .big { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3.2vw, 40px); line-height: 1.12; letter-spacing: -.015em; margin: 14px 0 0; }
+  .hero-l .big em { font-style: italic; color: var(--pine); }
+  .healthbar { height: 10px; border-radius: 999px; overflow: hidden; display: flex; margin: 26px 0 16px; background: var(--inset); }
+  .healthbar span { display: block; height: 100%; }
+  .facts { display: flex; gap: 30px; flex-wrap: wrap; }
+  .fact .n { font-family: var(--serif); font-size: 26px; font-weight: 400; line-height: 1; }
+  .fact .l { font-size: 12.5px; color: var(--ink-3); margin-top: 5px; }
+  .hero-r { background: var(--pine-tint); border-left: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; gap: 6px; }
+  .ring { width: 172px; height: 172px; position: relative; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .ctr { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring .ctr .p { font-family: var(--serif); font-size: 42px; font-weight: 400; line-height: 1; }
+  .ring .ctr .s { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+
+  .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 22px; }
+  @media (max-width: 1000px){ .grid2 { grid-template-columns: 1fr; } }
+
+  .care-item { display: flex; align-items: center; gap: 16px; padding: 18px 26px; border-bottom: 1px solid var(--line); transition: background .14s; }
+  .care-item:last-child { border-bottom: none; }
+  .care-item:hover { background: var(--surface-2); }
+  .care-ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0; }
+  .care-ic svg { width: 20px; height: 20px; }
+  .care-name { font-weight: 600; font-size: 14.5px; }
+  .care-desc { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+
+  .tl { display: flex; flex-direction: column; }
+  .tl-row { display: flex; align-items: center; gap: 14px; padding: 15px 26px; border-bottom: 1px solid var(--line); }
+  .tl-row:last-child { border-bottom: none; }
+  .tl-time { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); width: 46px; flex-shrink: 0; }
+  .tl-name { font-weight: 500; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-sub { font-size: 11.5px; color: var(--ink-3); }
+
+  .res { display: flex; flex-direction: column; gap: 18px; }
+  .res-item .rl { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+  .res-item .rl b { font-weight: 600; font-family: var(--mono); }
+  .res-bar { height: 7px; border-radius: 999px; background: var(--inset); overflow: hidden; }
+  .res-bar span { display: block; height: 100%; border-radius: 999px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto: tenant, stats, recent_backups, attention_items, success_count, failed_count,
+   no_history_count, failed_24h, backups_today, failed_today, backup_progress,
+   total_scheduled, next_backup_time, backup_target_rate, weekly_delta_rate,
+   usage_snapshot, chart_data. Servidor via AJAX tenant.server_metrics. #}
+{% set ok       = success_count|default(0) %}
+{% set fail     = failed_count|default(0) %}
+{% set nohist   = no_history_count|default(0) %}
+{% set total    = total_scheduled|default(0) %}
+{% set pct      = backup_progress|default(0) %}
+{% set today_ok = (backups_today|default(0)) - (failed_today|default(0)) %}
+{% set hb_total = (ok + fail + nohist) or 1 %}
+{% set delta    = weekly_delta_rate|default(0) %}
+
+{# Injeta dados para o chip de status do rail #}
+<input type="hidden" id="rail-fail-24h" value="{{ failed_24h|default(0) }}">
+<input type="hidden" id="rail-ok-count" value="{{ ok }}">
+<input type="hidden" id="rail-total" value="{{ total }}">
+
+<div class="wrap">
+
+  {# ---- Greeting ---- #}
+  <div class="page-h">
+    <div class="eyebrow" id="today-date"></div>
+    <h1><span id="greet">Olá</span>, {{ (session.get('user_name','') or 'você').split()[0] }}.</h1>
+    <p>
+      {% if failed_24h|default(0) == 0 %}
+        O ambiente está calmo. A maioria dos seus equipamentos está protegida e em dia.
+      {% else %}
+        O ambiente está operacional — abaixo estão os poucos pontos que pedem um olhar.
+      {% endif %}
+    </p>
+  </div>
+
+  {# ---- Hero ---- #}
+  <div class="panel hero">
+    <div class="hero-l">
+      <div class="eyebrow">Estado do ambiente</div>
+      <div class="big"><em>{{ ok }} de {{ total }}</em> dispositivos com backup recente e seguro.</div>
+      <div class="healthbar">
+        <span style="width:{{ (ok/hb_total*100)|round(1) }}%;background:var(--good)"></span>
+        <span style="width:{{ (nohist/hb_total*100)|round(1) }}%;background:var(--care)"></span>
+        <span style="width:{{ (fail/hb_total*100)|round(1) }}%;background:var(--crit)"></span>
+      </div>
+      <div class="facts">
+        <div class="fact"><div class="n">{{ today_ok }}</div><div class="l">sucessos hoje</div></div>
+        <div class="fact"><div class="n" style="color:var(--care)">{{ failed_24h|default(0) }}</div><div class="l">falhas · 24h</div></div>
+        <div class="fact"><div class="n">{{ next_backup_time|default('—') }}</div><div class="l">próxima janela</div></div>
+      </div>
+    </div>
+    <div class="hero-r">
+      <div class="ring">
+        <svg viewBox="0 0 160 160">
+          <circle cx="80" cy="80" r="64" fill="none" stroke="var(--inset)" stroke-width="11"></circle>
+          <circle cx="80" cy="80" r="64" fill="none" stroke="var(--pine)" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="{{ pct }} 100"></circle>
+        </svg>
+        <div class="ctr"><div><div class="p">{{ pct }}%</div><div class="s">taxa de sucesso</div></div></div>
+      </div>
+      <div class="faint" style="font-size:12px;text-align:center">Meta de {{ backup_target_rate|default(90)|round|int }}%{% if delta %} · {{ '+' if delta >= 0 else '' }}{{ delta }}pp na semana{% endif %}</div>
+    </div>
+  </div>
+
+  {# ---- Pede atenção ---- #}
+  <div class="panel" style="margin-bottom:22px">
+    <div class="panel-head">
+      <h3><i data-lucide="hand"></i>Pede atenção</h3>
+      <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}?status=failed" class="tag tag-pine" style="cursor:pointer">Ver todas as pendências</a>
+    </div>
+    <div>
+      {% for item in attention_items|default([]) %}
+      <div class="care-item">
+        <span class="care-ic" style="background:var(--crit-soft);color:var(--crit)"><i data-lucide="{{ item.icon }}"></i></span>
+        <div style="flex:1;min-width:0">
+          <div class="care-name">{{ item.name }}</div>
+          <div class="care-desc">{{ item.group }} — {{ item.reason }}</div>
+        </div>
+        <a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=item.id) }}" class="btn btn-line btn-sm">Resolver</a>
+      </div>
+      {% else %}
+      <div class="care-item">
+        <span class="care-ic" style="background:var(--good-soft);color:var(--good)"><i data-lucide="check"></i></span>
+        <div style="flex:1;min-width:0">
+          <div class="care-name">Tudo em dia</div>
+          <div class="care-desc">Nenhum dispositivo pede atenção no momento.</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ---- Atividade + lateral ---- #}
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-head"><h3><i data-lucide="history"></i>Atividade recente</h3>
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}" class="faint" style="font-size:12.5px">Histórico completo →</a></div>
+      <div class="tl">
+        {% for b in recent_backups %}
+        {% set s = (b.status_value if b.status_value is defined and b.status_value else (b.status.value if b.status and b.status.value is defined else b.status))|default('') %}
+        <div class="tl-row">
+          <span class="tl-time">{{ (b.started_at|localtime).strftime('%H:%M') if b.started_at else '—' }}</span>
+          <span class="dot {% if s == 'success' %}dot-good{% else %}dot-care{% endif %}"></span>
+          <div style="flex:1;min-width:0">
+            <div class="tl-name">{{ b.device.name if b.device else '—' }}</div>
+            <div class="tl-sub">{{ b.device.type.name if b.device and b.device.type else '' }}{% if b.file_size_bytes %} · {{ (b.file_size_bytes / 1024)|int }} KB{% endif %}</div>
+          </div>
+          {% if s == 'success' %}<span class="tag tag-good"><i data-lucide="check"></i>Sucesso</span>
+          {% elif s == 'failed' %}<span class="tag tag-care"><i data-lucide="alert-triangle"></i>Falha</span>
+          {% else %}<span class="tag"><i data-lucide="clock"></i>Pendente</span>{% endif %}
+          <a href="{{ url_for('tenant_backups.view_backup', tenant_slug=tenant.slug, backup_id=b.id) }}" class="ibtn" title="Ver backup" style="margin-left:6px"><i data-lucide="external-link"></i></a>
+        </div>
+        {% else %}
+        <div style="padding:40px;text-align:center;color:var(--ink-3)">Nenhum backup ainda</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div class="panel">
+        <div class="panel-head"><h3><i data-lucide="trending-up"></i>Últimos 7 dias</h3>
+          <div class="faint" style="font-size:12px;display:flex;gap:14px">
+            <span><span class="dot dot-good"></span> Sucesso</span>
+            <span><span class="dot dot-care"></span> Falhas</span>
+          </div>
+        </div>
+        <div style="padding:18px 22px 22px;height:200px"><canvas id="dashHistoryChart"></canvas></div>
+      </div>
+
+      <div class="panel panel-pad">
+        <div style="font-size:13px;color:var(--ink-2);margin-bottom:18px">Recursos do servidor <span class="faint" style="font-size:11px">· tempo real</span></div>
+        <div class="res">
+          <div class="res-item">
+            <div class="rl"><span>Processador</span><b id="server-cpu-val">—%</b></div>
+            <div class="res-bar"><span id="server-cpu-bar" style="width:0%;background:var(--calm-blue);transition:width .5s ease"></span></div>
+          </div>
+          <div class="res-item">
+            <div class="rl"><span>Memória</span><b id="server-ram-val">—%</b></div>
+            <div class="faint" style="font-size:11px;margin:-2px 0 8px" id="server-ram-sub">— GB / — GB</div>
+            <div class="res-bar"><span id="server-ram-bar" style="width:0%;background:var(--lilac);transition:width .5s ease"></span></div>
+          </div>
+          <div class="res-item">
+            <div class="rl"><span>Armazenamento</span><b>{{ stats.storage_used }}</b></div>
+            <div class="faint" style="font-size:11px;margin:-2px 0 8px">Limite do plano: {{ usage_snapshot.storage_limit_label }}</div>
+            <div class="res-bar"><span style="width:{{ usage_snapshot.storage_usage_pct }}%;background:var(--pine)"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block page_js %}
+  // saudação por horário + data
+  (function(){
+    var d = new Date();
+    var el = document.getElementById('today-date');
+    if(el) el.textContent = d.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+    var h = d.getHours();
+    var g = document.getElementById('greet');
+    if(g) g.textContent = h < 12 ? 'Bom dia' : (h < 18 ? 'Boa tarde' : 'Boa noite');
+  })();
+
+  // métricas do servidor em tempo real
+  (function(){
+    function fetchServerMetrics(){
+      fetch('{{ url_for("tenant.server_metrics", tenant_slug=tenant_slug) }}')
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          var cv=document.getElementById('server-cpu-val'), cb=document.getElementById('server-cpu-bar');
+          if(cv) cv.textContent = data.cpu_percent + '%';
+          if(cb) cb.style.width = Math.min(100, data.cpu_percent) + '%';
+          var rv=document.getElementById('server-ram-val'), rs=document.getElementById('server-ram-sub'), rb=document.getElementById('server-ram-bar');
+          if(rv) rv.textContent = data.ram_percent + '%';
+          if(rs) rs.textContent = data.ram_used_gb + ' GB / ' + data.ram_total_gb + ' GB';
+          if(rb) rb.style.width = data.ram_percent + '%';
+        })
+        .catch(function(e){ console.error('Falha ao buscar metricas:', e); });
+    }
+    fetchServerMetrics();
+    setInterval(fetchServerMetrics, 5000);
+  })();
+
+  // gráfico de 7 dias
+  (function(){
+    if(!window.Chart) return;
+    var cv = document.getElementById('dashHistoryChart');
+    if(!cv) return;
+    var parsed = JSON.parse('{{ chart_data|safe }}');
+    new Chart(cv.getContext('2d'), {
+      type:'line',
+      data:{ labels:parsed.dates, datasets:[
+        { label:'Sucesso', data:parsed.success, borderColor:'#1f8f5f', backgroundColor:'rgba(31,143,95,.10)', fill:true, tension:.35, borderWidth:2, pointRadius:0, pointHoverRadius:4 },
+        { label:'Falhas', data:parsed.failed, borderColor:'#c2683a', backgroundColor:'rgba(194,104,58,.10)', fill:true, tension:.35, borderWidth:2, pointRadius:0, pointHoverRadius:4 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{ x:{ ticks:{ font:{ size:10 } }, grid:{ display:false } }, y:{ ticks:{ font:{ size:10 } }, beginAtZero:true } },
+        interaction:{ mode:'index', intersect:false } }
+    });
+  })();
+{% endblock %}

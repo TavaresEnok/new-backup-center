@@ -1,0 +1,16 @@
+{% extends "base_redesign.html" %}
+{% block title %}Grupos · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Grupos</b>{% endblock %}
+
+{# Nota: a rota tenant_groups.list_groups redireciona para tenant_operations.index, entao
+   este template normalmente nao e renderizado. Mantido no novo visual por consistencia. #}
+{% block content %}
+<div class="wrap">
+  <div class="panel"><div class="empty">
+    <div class="empty-ic"><i data-lucide="folder-tree"></i></div>
+    <h4>Grupos</h4>
+    <p>A gestão de grupos foi unificada na visão de operação.</p>
+    <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-pine" style="margin-top:12px"><i data-lucide="arrow-right"></i>Abrir Grupos</a>
+  </div></div>
+</div>
+{% endblock %}

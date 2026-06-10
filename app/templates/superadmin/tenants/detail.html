@@ -1,0 +1,304 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}{{ tenant.name }} | Cliente 360{% endblock %}
+
+{% block content %}
+{% set admin_return_url = url_for('superadmin_tenants.view_tenant', tenant_id=tenant.id) %}
+<style>
+  .tenant-detail-shell { max-width: 1320px; margin: 0 auto; }
+  .tenant-hero, .tenant-panel, .tenant-metric { border: 1px solid var(--line); border-radius: var(--r3); background: var(--surface); box-shadow: var(--sh-1); }
+  .tenant-table { width:100%; border-collapse: collapse; }
+  .tenant-table th { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); font-weight:600; padding:.75rem .9rem; border-bottom:1px solid var(--line); text-align:left; }
+  .tenant-table td { padding:.82rem .9rem; border-bottom:1px solid var(--line); font-size:.87rem; color:var(--ink); vertical-align: top; }
+  .tenant-table tbody tr:hover { background: var(--surface-2); }
+</style>
+
+{% set subscription = (tenant.subscription_status or 'unknown') %}
+
+<div class="tenant-detail-shell space-y-6 pb-4">
+    <section class="tenant-hero p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-400">Cliente 360</p>
+                <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-[var(--text-main)]">{{ tenant.name }}</h1>
+                <p class="mt-2 text-sm text-[var(--text-muted)]">{{ tenant.slug }} • {{ tenant.email }}</p>
+                <div class="mt-4 flex flex-wrap gap-2 text-xs">
+                    <span class="rounded-lg border border-[var(--line-color)] bg-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">
+                        {% if tenant.deleted_at %}
+                        Na lixeira
+                        {% else %}
+                        {{ 'Ativo' if tenant.is_active else 'Inativo' }}
+                        {% endif %}
+                    </span>
+                    <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">
+                        Assinatura: {{ subscription|replace('_', ' ')|title }}
+                    </span>
+                    <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">
+                        Plano: {{ plan_label }}
+                    </span>
+                    {% if tenant.access_unlimited %}
+                    <span class="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-blue-300">
+                        Acesso ilimitado
+                    </span>
+                    {% endif %}
+                    {% if tenant.protected_system_tenant %}
+                    <span class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">
+                        Cliente protegido
+                    </span>
+                    {% endif %}
+                    {% if tenant.deleted_at %}
+                    <span class="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-rose-300">
+                        Na lixeira desde {{ format_datetime(tenant.deleted_at, "%d/%m/%Y %H:%M", "-") }}
+                    </span>
+                    {% if tenant.delete_reason %}
+                    <span class="rounded-lg border border-rose-500/20 px-2.5 py-1 text-rose-200">
+                        Motivo: {{ tenant.delete_reason }}
+                    </span>
+                    {% endif %}
+                    {% endif %}
+                    {% if tenant.company_name %}
+                    <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">
+                        Empresa: {{ tenant.company_name }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                {% if not tenant.deleted_at %}
+                <a href="{{ url_for('tenant.dashboard', tenant_slug=tenant.slug, admin_return=admin_return_url, admin_return_label='Voltar ao Cliente 360') }}"
+                    class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+                    Abrir cliente
+                </a>
+                <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, admin_return=admin_return_url, admin_return_label='Voltar ao Cliente 360') }}"
+                    class="rounded-xl border border-[var(--card-border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Dispositivos
+                </a>
+                <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug, admin_return=admin_return_url, admin_return_label='Voltar ao Cliente 360') }}"
+                    class="rounded-xl border border-[var(--card-border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Backups
+                </a>
+                <a href="{{ url_for('billing.dashboard', tenant_slug=tenant.slug, admin_return=admin_return_url, admin_return_label='Voltar ao Cliente 360') }}"
+                    class="rounded-xl border border-[var(--card-border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Assinatura
+                </a>
+                <a href="{{ url_for('superadmin_billing.list_billing', q=tenant.name) }}"
+                    class="rounded-xl border border-[var(--card-border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Cobranca
+                </a>
+                <a href="{{ url_for('superadmin_tenants.edit_tenant', tenant_id=tenant.id) }}"
+                    class="rounded-xl border border-[var(--card-border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Editar cliente
+                </a>
+                <form method="POST" action="{{ url_for('superadmin_tenants.toggle_tenant_active', tenant_id=tenant.id) }}" class="inline"
+                    data-confirm="{{ 'Desativar' if tenant.is_active else 'Ativar' }} o cliente {{ tenant.name }} agora?"
+                    onsubmit="return confirm(this.dataset.confirm);">
+                    {% include 'partials/csrf.html' %}
+                    <input type="hidden" name="return_url" value="{{ request.path }}">
+                    <button type="submit"
+                        class="rounded-xl border px-4 py-2.5 text-sm font-semibold {% if tenant.is_active %}border-amber-500/30 text-amber-300 hover:bg-amber-500/10{% else %}border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10{% endif %}">
+                        {{ 'Desativar' if tenant.is_active else 'Ativar' }}
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('superadmin_tenants.delete_tenant', tenant_id=tenant.id) }}" class="inline"
+                    data-confirm="Enviar o cliente {{ tenant.name }} para a lixeira agora?"
+                    onsubmit="return confirm(this.dataset.confirm);">
+                    {% include 'partials/csrf.html' %}
+                    <input type="hidden" name="return_url" value="{{ url_for('superadmin_tenants.list_tenants') }}">
+                    <button type="submit" {% if tenant.protected_system_tenant %}disabled{% endif %}
+                        class="rounded-xl border border-rose-500/30 px-4 py-2.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/10">
+                        Enviar para lixeira
+                    </button>
+                </form>
+                {% else %}
+                <form method="POST" action="{{ url_for('superadmin_tenants.restore_tenant', tenant_id=tenant.id) }}" class="inline"
+                    data-confirm="Restaurar o cliente {{ tenant.name }} agora?"
+                    onsubmit="return confirm(this.dataset.confirm);">
+                    {% include 'partials/csrf.html' %}
+                    <input type="hidden" name="return_url" value="{{ request.path }}">
+                    <button type="submit"
+                        class="rounded-xl border border-emerald-500/30 px-4 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/10">
+                        Restaurar cliente
+                    </button>
+                </form>
+                <form method="POST" action="{{ url_for('superadmin_tenants.purge_tenant', tenant_id=tenant.id) }}" class="inline"
+                    data-confirm="Apagar permanentemente o cliente {{ tenant.name }}? Esta ação remove usuários, dispositivos, faturamento e configurações vinculadas."
+                    onsubmit="return confirm(this.dataset.confirm);">
+                    {% include 'partials/csrf.html' %}
+                    <input type="hidden" name="return_url" value="{{ url_for('superadmin_tenants.list_tenants', status='trash') }}">
+                    <button type="submit" {% if tenant.protected_system_tenant %}disabled{% endif %}
+                        class="rounded-xl border border-rose-500/30 px-4 py-2.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/10">
+                        Apagar definitivo
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="admin-summary-strip admin-summary-strip--full grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Inventario</p>
+            <p class="mt-2 text-2xl font-bold text-[var(--text-main)]">{{ stats.device_count }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">{{ stats.active_device_count }} ativos • {{ stats.group_count }} grupos</p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Rotina</p>
+            <p class="mt-2 text-2xl font-bold text-[var(--text-main)]">{{ stats.scheduled_device_count }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">Dispositivos com backup agendado</p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Usuarios</p>
+            <p class="mt-2 text-2xl font-bold text-[var(--text-main)]">{{ stats.user_count }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">{{ stats.admin_user_count }} com perfil admin/owner</p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Receita</p>
+            <p class="mt-2 text-2xl font-bold text-[var(--text-main)]">R$ {{ '%.2f'|format(stats.mrr) }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">MRR estimado do plano atual</p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Backup 24h</p>
+            <p class="mt-2 text-2xl font-bold text-emerald-300">{{ stats.backup_success_24h }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">Sucessos • <span class="text-rose-300">{{ stats.backup_failed_24h }} falhas</span></p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Backup 30d</p>
+            <p class="mt-2 text-2xl font-bold text-emerald-300">{{ stats.backup_success_30d }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">Sucessos • <span class="text-rose-300">{{ stats.backup_failed_30d }} falhas</span></p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Faturas abertas</p>
+            <p class="mt-2 text-2xl font-bold text-[var(--text-main)]">{{ stats.invoices_pending + stats.invoices_failed }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">{{ stats.invoices_pending }} pendentes • {{ stats.invoices_failed }} com falha</p>
+        </div>
+        <div class="tenant-metric p-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">Proximo vencimento</p>
+            <p class="mt-2 text-2xl font-bold text-[var(--text-main)]">{{ format_datetime(stats.next_due, "%d/%m/%Y", "-") }}</p>
+            <p class="mt-1 text-xs text-[var(--text-muted)]">Aberto atual: R$ {{ '%.2f'|format(stats.open_invoices_amount) }}</p>
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <section class="tenant-panel p-4 xl:col-span-2">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Backups recentes</h2>
+                <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}" class="text-xs font-semibold text-blue-400 hover:text-blue-300">Abrir historico</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="tenant-table min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Dispositivo</th>
+                            <th>Status</th>
+                            <th>Criado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup, device_name in recent_backups %}
+                        <tr>
+                            <td>{{ device_name }}</td>
+                            <td>
+                                {% if backup.status.value == 'success' %}
+                                <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-300">Sucesso</span>
+                                {% elif backup.status.value == 'failed' %}
+                                <span class="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300">Falha</span>
+                                {% else %}
+                                <span class="rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-semibold text-[var(--text-main)]">{{ backup.status.value|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ format_datetime(backup.created_at, "%d/%m/%Y %H:%M", "-") }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-[var(--text-muted)]">Sem backups recentes.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="tenant-panel p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Usuarios recentes</h2>
+                <a href="{{ url_for('superadmin_users.list_users', scope='tenant', tenant=tenant.id) }}" class="text-xs font-semibold text-blue-400 hover:text-blue-300">Gerenciar</a>
+            </div>
+            <div class="space-y-3">
+                {% for user in recent_users %}
+                <div class="rounded-xl border border-[var(--line-color)] p-3">
+                    <p class="text-sm font-semibold text-[var(--text-main)]">{{ user.full_name }}</p>
+                    <p class="mt-1 text-xs text-[var(--text-muted)]">{{ user.email }}</p>
+                    <p class="mt-1 text-xs text-[var(--text-muted)]">{{ user.role.value|replace('_', ' ')|title }} • {{ format_datetime(user.created_at, "%d/%m/%Y", "-") }}</p>
+                </div>
+                {% else %}
+                <div class="rounded-xl border border-dashed border-[var(--line-color)] p-4 text-sm text-[var(--text-muted)]">Sem usuarios recentes.</div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section class="tenant-panel p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Faturas recentes</h2>
+                <a href="{{ url_for('superadmin_billing.list_billing', q=tenant.name) }}" class="text-xs font-semibold text-blue-400 hover:text-blue-300">Abrir cobranca</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="tenant-table min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Fatura</th>
+                            <th>Status</th>
+                            <th>Vencimento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in recent_invoices %}
+                        <tr>
+                            <td>
+                                <p>{{ invoice.invoice_number }}</p>
+                                <p class="text-xs text-[var(--text-muted)]">R$ {{ '%.2f'|format((invoice.amount or 0) / 100) }}</p>
+                            </td>
+                            <td>
+                                {% if invoice.status.value == 'paid' %}
+                                <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-300">Paga</span>
+                                {% elif invoice.status.value == 'pending' %}
+                                <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300">Pendente</span>
+                                {% elif invoice.status.value == 'failed' %}
+                                <span class="rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300">Falha</span>
+                                {% else %}
+                                <span class="rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-semibold text-[var(--text-main)]">{{ invoice.status.value|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ format_datetime(invoice.due_date, "%d/%m/%Y", "-") }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-[var(--text-muted)]">Sem faturas registradas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="tenant-panel p-4">
+            <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Atividade recente</h2>
+                <a href="{{ url_for('tenant.dashboard', tenant_slug=tenant.slug) }}" class="text-xs font-semibold text-blue-400 hover:text-blue-300">Abrir painel do cliente</a>
+            </div>
+            <div class="space-y-3">
+                {% for item in recent_activities %}
+                <div class="rounded-xl border border-[var(--line-color)] p-3">
+                    <p class="text-sm font-semibold text-[var(--text-main)]">{{ item.action }}</p>
+                    <p class="mt-1 text-xs text-[var(--text-muted)]">{{ item.user.full_name if item.user else 'Sistema' }} • {{ format_datetime(item.created_at, "%d/%m/%Y %H:%M", "-") }}</p>
+                    <p class="mt-2 text-sm text-[var(--text-main)]">{{ item.details or 'Sem detalhes adicionais.' }}</p>
+                </div>
+                {% else %}
+                <div class="rounded-xl border border-dashed border-[var(--line-color)] p-4 text-sm text-[var(--text-muted)]">Sem atividade recente.</div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

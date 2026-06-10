@@ -1,0 +1,121 @@
+{% extends "base_redesign.html" %}
+{% block title %}Equipe · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Equipe</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/users.py list_users): tenant, users, stats{total,active,
+   inactive,admins,technicians}, status_filter, search_query, UserRole.
+   Campos reais do User: full_name, email, role(UserRole), is_active, id #}
+{% set role = session.get('user_role') %}
+{% set can_manage_users = role in ['super_admin','tenant_owner','tenant_admin'] %}
+
+<div class="wrap">
+  <div class="page-h head-row" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+    <div>
+      <div class="eyebrow">{{ stats.total }} pessoas · {{ stats.active }} ativas</div>
+      <h1>Equipe</h1>
+      <p>Controle quem acessa o Backup Center e com qual nível de permissão.</p>
+    </div>
+    {% if can_manage_users %}
+    <div class="actions">
+      <a href="{{ url_for('tenant_users.add_user', tenant_slug=tenant.slug) }}" class="btn btn-pine"><i data-lucide="user-plus"></i>Novo usuário</a>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Resumo #}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px">
+    {% for ic,val,lbl in [
+      ('users', stats.total, 'Total'),
+      ('user-check', stats.active, 'Ativos'),
+      ('shield', stats.admins, 'Admins'),
+      ('wrench', stats.technicians, 'Técnicos')
+    ] %}
+    <div class="panel panel-pad" style="display:flex;align-items:center;gap:12px">
+      <span style="width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--pine-soft);color:var(--pine);flex-shrink:0"><i data-lucide="{{ ic }}"></i></span>
+      <div><div style="font-family:var(--serif);font-size:22px;line-height:1">{{ val }}</div><div class="faint" style="font-size:11.5px">{{ lbl }}</div></div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Filtros #}
+  <form method="GET" action="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:22px">
+    <div class="field" style="flex:1;min-width:220px"><i data-lucide="search"></i>
+      <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Buscar por nome ou e-mail…"></div>
+    <div class="seg">
+      {% for val,lbl in [('active','Ativos'),('all','Todos'),('inactive','Inativos')] %}
+      <button type="submit" name="status" value="{{ val }}" class="{% if status_filter==val %}on{% endif %}">{{ lbl }}</button>
+      {% endfor %}
+    </div>
+  </form>
+
+  <div class="panel">
+    <div class="sc"><table class="tbl">
+      <thead><tr>
+        <th class="col-name">Pessoa</th>
+        <th>Papel</th>
+        <th class="col-md">Acesso</th>
+        <th class="col-sm shrink">Última atividade</th>
+        <th style="text-align:right">Ações</th>
+      </tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="col-name">
+            <div class="dv" style="display:flex;align-items:center;gap:12px">
+              <div style="width:42px;height:42px;border-radius:13px;display:grid;place-items:center;flex-shrink:0;background:var(--pine-soft);color:var(--pine);font-family:var(--serif);font-size:18px;font-weight:500;flex-shrink:0">
+                {{ u.full_name[0]|upper if u.full_name else 'U' }}
+              </div>
+              <div style="min-width:0">
+                <div class="dv-name" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  {{ u.full_name }}
+                  {% if u.email == session.get('user_email') or u.id|string == session.get('user_id')|string %}<span class="tag" style="font-size:11px">você</span>{% endif %}
+                </div>
+                <div class="faint" style="font-size:12px;font-family:var(--mono)">{{ u.email }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            {% if u.role == UserRole.TENANT_OWNER %}
+            <span class="tag tag-pine"><i data-lucide="crown"></i>Administrador Master</span>
+            {% elif u.role == UserRole.TENANT_ADMIN %}
+            <span class="tag tag-blue"><i data-lucide="shield"></i>Admin</span>
+            {% else %}
+            <span class="tag"><i data-lucide="wrench"></i>Técnico</span>
+            {% endif %}
+          </td>
+          <td class="col-sm shrink">
+            {% if u.is_active %}
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--good)"><span class="dot dot-good"></span>Ativo</span>
+            {% else %}
+            <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3)"><span class="dot"></span>Inativo</span>
+            {% endif %}
+          </td>
+          <td class="col-sm shrink">
+            <span class="faint" style="font-size:12px;font-family:var(--mono)">{{ (u.last_login|localtime).strftime('%d/%m %H:%M') if u.last_login else 'Nunca' }}</span>
+          </td>
+          <td>
+            <div class="row g2" style="display:flex;gap:8px;justify-content:flex-end">
+              {% if can_manage_users %}
+              <a href="{{ url_for('tenant_users.edit_user', tenant_slug=tenant.slug, user_id=u.id) }}" class="act" title="Editar"><i data-lucide="settings"></i></a>
+              <form method="POST" action="{{ url_for('tenant_users.delete_user', tenant_slug=tenant.slug, user_id=u.id) }}" style="display:inline"
+                    onsubmit="return confirm('Remover este usuário? Se houver histórico vinculado, ele será apenas desativado.')">
+                {% include 'partials/csrf.html' %}
+                <button type="submit" class="act bad" title="Remover"><i data-lucide="user-x"></i></button>
+              </form>
+              {% else %}
+              <span class="faint" style="font-size:12px">—</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">
+          <div class="empty"><div class="empty-ic"><i data-lucide="users"></i></div><h4>Nenhum usuário encontrado</h4><p>Ajuste a busca/filtro ou adicione um novo usuário.</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

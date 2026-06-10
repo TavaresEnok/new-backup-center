@@ -1,0 +1,73 @@
+{% extends "base_redesign.html" %}
+{% block title %}Relatórios agendados · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant.slug) }}">Configurações</a><i data-lucide="chevron-right"></i><b>Relatórios agendados</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/settings.py reports): tenant, reports[{name,report_type.value,
+   is_active,schedule.value,recipients,last_sent_at}] #}
+<div class="wrap">
+  <div class="page-h"><div class="eyebrow">Conta</div><h1>Relatórios agendados</h1><p>Envios automáticos por e-mail com o resumo das operações.</p></div>
+  <div class="set-grid" style="display:grid;grid-template-columns:240px 1fr;gap:26px;align-items:start">
+    {% set settings_section = 'reports' %}{% include 'partials/settings_nav_redesign.html' %}
+    <div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button type="button" class="btn btn-pine" onclick="document.getElementById('add-report-modal').style.display='flex'"><i data-lucide="plus"></i>Novo relatório</button>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3><i data-lucide="mail"></i>Relatórios configurados</h3><span class="tag">{{ reports|length }}</span></div>
+        <div>
+          {% for report in reports %}
+          <div style="display:flex;align-items:center;gap:14px;padding:16px 26px;border-bottom:1px solid var(--line);flex-wrap:wrap">
+            <div style="flex:1;min-width:180px">
+              <div style="font-weight:600;font-size:14px">{{ report.name }}</div>
+              <div class="faint" style="font-size:12px;margin-top:2px">{{ report.report_type.value|replace('_',' ')|title }} · {{ report.schedule.value|title }} · {{ report.recipients|length }} e-mail(s)</div>
+            </div>
+            <span class="faint" style="font-size:12px">Último envio: {{ (report.last_sent_at|localtime).strftime('%d/%m/%Y') if report.last_sent_at else 'Nunca' }}</span>
+            {% if report.is_active %}<span class="tag tag-good">Ativo</span>{% else %}<span class="tag">Inativo</span>{% endif %}
+          </div>
+          {% else %}
+          <div class="empty"><div class="empty-ic"><i data-lucide="mail"></i></div><h4>Nenhum relatório agendado</h4><p>Crie um envio automático para receber resumos por e-mail.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Modal novo relatorio #}
+  <div id="add-report-modal" style="display:none;position:fixed;inset:0;z-index:50;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:20px">
+    <div class="panel panel-pad" style="max-width:460px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div style="font-family:var(--serif);font-size:20px">Novo relatório</div>
+        <button type="button" class="ibtn" onclick="document.getElementById('add-report-modal').style.display='none'"><i data-lucide="x"></i></button>
+      </div>
+      <form method="POST" action="{{ url_for('tenant_settings.create_report', tenant_slug=tenant.slug) }}">
+        {% include 'partials/csrf.html' %}
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div><label class="lbl">Nome</label><input type="text" name="name" class="inp" required></div>
+          <div><label class="lbl">Tipo</label>
+            <select name="report_type" class="inp">
+              <option value="daily_summary">Resumo diário</option>
+              <option value="weekly_report">Relatório semanal</option>
+              <option value="monthly_report">Relatório mensal</option>
+              <option value="failure_alert">Alerta de falhas</option>
+            </select>
+          </div>
+          <div><label class="lbl">Frequência</label>
+            <select name="schedule" class="inp">
+              <option value="daily">Diário</option>
+              <option value="weekly">Semanal</option>
+              <option value="monthly">Mensal</option>
+            </select>
+          </div>
+          <div><label class="lbl">Destinatários (separados por vírgula)</label><input type="text" name="recipients" class="inp" placeholder="email1@exemplo.com, email2@exemplo.com"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button type="button" class="btn btn-ghost" style="flex:1;justify-content:center" onclick="document.getElementById('add-report-modal').style.display='none'">Cancelar</button>
+          <button type="submit" class="btn btn-pine" style="flex:1;justify-content:center">Criar relatório</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<style>@media (max-width:860px){ .set-grid{grid-template-columns:1fr !important} }</style>
+{% endblock %}

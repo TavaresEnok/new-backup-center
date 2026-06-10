@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validar 2FA | Backup Center</title>
+
+    <link href="{{ url_for('static', filename='css/redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/auth_redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <main class="auth-page">
+        <div class="auth-shell auth-shell-narrow">
+            <section class="auth-card">
+                <div class="auth-brand">
+                    <div class="brand-mark">
+                        <i data-lucide="shield-check"></i>
+                    </div>
+                    <div class="auth-brand-copy">
+                        <strong>Backup Center</strong>
+                        <span>Seguranca adicional</span>
+                    </div>
+                </div>
+
+                <header class="auth-head">
+                    <p class="eyebrow">Autenticacao em 2 fatores</p>
+                    <h1>Validar codigo</h1>
+                    <p>Conta: <span class="account">{{ email }}</span></p>
+                </header>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="auth-flashes">
+                    {% for category, message in messages %}
+                    <div class="auth-flash {% if category == 'success' %}is-success{% elif category == 'warning' %}is-warning{% elif category == 'info' %}is-info{% elif category == 'danger' %}is-danger{% else %}is-error{% endif %}">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <form action="{{ url_for('auth.two_factor_verify') }}" method="POST" class="auth-form">
+                    {% include 'partials/csrf.html' %}
+                    <div class="auth-field-group">
+                        <label for="code" class="auth-label">Codigo do autenticador</label>
+                        <div class="field auth-field auth-field-code">
+                            <i data-lucide="key-round"></i>
+                            <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus placeholder="000000" autocomplete="one-time-code">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-pine btn-full">
+                        <i data-lucide="check-circle-2"></i>
+                        Validar e entrar
+                    </button>
+                </form>
+
+                <form action="{{ url_for('auth.two_factor_cancel') }}" method="POST" class="auth-separator">
+                    {% include 'partials/csrf.html' %}
+                    <button type="submit" class="btn btn-line btn-full">
+                        <i data-lucide="arrow-left"></i>
+                        Cancelar e voltar ao login
+                    </button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

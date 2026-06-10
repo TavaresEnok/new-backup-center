@@ -1,0 +1,16 @@
+{# Navegacao lateral de Configuracoes (novo visual). Espera: tenant, settings_section. #}
+{% set settings_section = settings_section|default('general') %}
+<div class="panel panel-pad" style="display:flex;flex-direction:column;gap:4px;align-self:start">
+  {% for sec,endpoint,lbl,ic in [
+    ('general','tenant_settings.general_settings','Geral','building-2'),
+    ('profile','tenant_settings.profile','Meu perfil','user'),
+    ('notifications','tenant_settings.notifications','Notificações','bell'),
+    ('reports','tenant_settings.reports','Relatórios agendados','mail'),
+    ('api_tokens','api_tokens.list_tokens','API Tokens','key')
+  ] %}
+  <a href="{{ url_for(endpoint, tenant_slug=tenant.slug) }}"
+     class="nav-link {% if settings_section == sec %}on{% endif %}" style="font-size:13.5px">
+    <i data-lucide="{{ ic }}"></i><span class="nav-label">{{ lbl }}</span>
+  </a>
+  {% endfor %}
+</div>

@@ -1,0 +1,42 @@
+{% extends "base_redesign.html" %}
+{% block title %}Meu perfil · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant.slug) }}">Configurações</a><i data-lucide="chevron-right"></i><b>Meu perfil</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/settings.py profile): tenant, user{full_name,email,role,created_at} #}
+<div class="wrap">
+  <div class="page-h"><div class="eyebrow">Conta</div><h1>Meu perfil</h1><p>Seus dados de acesso e senha.</p></div>
+  <div class="set-grid" style="display:grid;grid-template-columns:240px 1fr;gap:26px;align-items:start">
+    {% set settings_section = 'profile' %}{% include 'partials/settings_nav_redesign.html' %}
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div class="panel panel-pad" style="display:flex;align-items:center;gap:16px">
+        <div style="width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--pine-soft);color:var(--pine);font-family:var(--serif);font-size:24px">{{ user.full_name[0]|upper if user.full_name else 'U' }}</div>
+        <div>
+          <div style="font-weight:600;font-size:17px">{{ user.full_name or 'Usuário' }}</div>
+          <div class="faint" style="font-size:13px">{{ user.role|replace('_',' ')|title }}{% if user.created_at %} · desde {{ (user.created_at|localtime).strftime('%d/%m/%Y') }}{% endif %}</div>
+        </div>
+      </div>
+      <form method="POST" action="{{ url_for('tenant_settings.profile', tenant_slug=tenant.slug) }}">
+        {% include 'partials/csrf.html' %}
+        <div class="panel panel-pad" style="margin-bottom:22px">
+          <div style="font-family:var(--serif);font-weight:400;font-size:21px;margin-bottom:18px">Dados pessoais</div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div><label class="lbl">Nome completo</label><input type="text" name="full_name" value="{{ user.full_name }}" class="inp"></div>
+            <div><label class="lbl">E-mail</label><input type="email" value="{{ user.email }}" class="inp mono" readonly style="opacity:.6;cursor:not-allowed"></div>
+          </div>
+        </div>
+        <div class="panel panel-pad" style="margin-bottom:22px">
+          <div style="font-family:var(--serif);font-weight:400;font-size:21px;margin-bottom:6px">Alterar senha</div>
+          <p class="faint" style="font-size:12.5px;margin-bottom:18px">Deixe em branco para manter a senha atual.</p>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div><label class="lbl">Senha atual</label><input type="password" name="current_password" class="inp" autocomplete="current-password"></div>
+            <div><label class="lbl">Nova senha</label><input type="password" name="password" minlength="6" class="inp" autocomplete="new-password"></div>
+          </div>
+        </div>
+        <div class="row" style="display:flex;justify-content:flex-end"><button type="submit" class="btn btn-pine"><i data-lucide="check"></i>Salvar</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<style>@media (max-width:860px){ .set-grid{grid-template-columns:1fr !important} }</style>
+{% endblock %}

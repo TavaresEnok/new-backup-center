@@ -1,0 +1,86 @@
+{% extends "base_redesign.html" %}
+{% block title %}Comparar versões · {{ device.name if device else '' }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_compare.select_device', tenant_slug=tenant.slug) }}">Comparar</a><i data-lucide="chevron-right"></i><b>{{ device.name if device else '—' }}</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/compare.py compare_backups): tenant, device, backups[{id,created_at}],
+   backup_old, backup_new, diff_result{has_changes,added_lines,removed_lines,error,
+   ignored_lines_old,ignored_lines_new, hunks[{context, lines[{type:'add'|'remove'|'context', content}]}]},
+   comparable_backups_count, total_backups_count #}
+<div class="wrap">
+  <a href="{{ url_for('tenant_compare.select_device', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm" style="margin-bottom:18px"><i data-lucide="arrow-left"></i>Trocar dispositivo</a>
+
+  <div class="page-h">
+    <div class="eyebrow">Diagnóstico seguro · {{ device.name if device else '' }}</div>
+    <h1>Comparar versões</h1>
+    <p>Verde = adicionado · Vermelho = removido. Total no banco: {{ total_backups_count or 0 }} · comparáveis: {{ comparable_backups_count or 0 }}.</p>
+  </div>
+
+  <form method="GET" action="{{ url_for('tenant_compare.compare_backups', tenant_slug=tenant.slug, device_id=device.id) if device else '#' }}"
+        class="panel picker">
+    <div style="flex:1;min-width:200px"><label class="lbl">Versão base (antiga)</label>
+      <div class="field"><i data-lucide="history"></i>
+        <select name="backup_old" required onchange="this.form.submit()">
+          {% for b in backups %}<option value="{{ b.id }}" {{ 'selected' if backup_old and b.id==backup_old.id else '' }}>{{ (b.created_at|localtime).strftime('%d/%m/%Y %H:%M') if b.created_at else b.id }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="arrow"><i data-lucide="arrow-right"></i></div>
+    <div style="flex:1;min-width:200px"><label class="lbl">Comparar com (nova)</label>
+      <div class="field"><i data-lucide="history"></i>
+        <select name="backup_new" required onchange="this.form.submit()">
+          {% for b in backups %}<option value="{{ b.id }}" {{ 'selected' if backup_new and b.id==backup_new.id else '' }}>{{ (b.created_at|localtime).strftime('%d/%m/%Y %H:%M') if b.created_at else b.id }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-pine"><i data-lucide="git-compare"></i>Comparar</button>
+  </form>
+
+  {% if diff_result %}
+  <div class="panel">
+    <div class="diff-head">
+      <div style="font-size:12.5px;color:var(--ink-2)">
+        {% if backup_old and backup_new %}
+        <span class="mono" style="font-family:var(--mono)">{{ (backup_old.created_at|localtime).strftime('%d/%m %H:%M') if backup_old.created_at else '—' }}</span>
+        → <span class="mono" style="font-family:var(--mono)">{{ (backup_new.created_at|localtime).strftime('%d/%m %H:%M') if backup_new.created_at else '—' }}</span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        {% if diff_result.has_changes %}
+        <span class="tag tag-good">+{{ diff_result.added_lines }} adições</span>
+        <span class="tag tag-crit">−{{ diff_result.removed_lines }} remoções</span>
+        {% else %}
+        <span class="tag tag-good"><i data-lucide="check"></i>Idênticos</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if diff_result.ignored_lines_old is defined or diff_result.ignored_lines_new is defined %}
+    <div style="padding:10px 26px;font-size:12px;color:var(--ink-3);border-bottom:1px solid var(--line)">
+      Linhas voláteis ignoradas (antiga: {{ diff_result.ignored_lines_old or 0 }}, nova: {{ diff_result.ignored_lines_new or 0 }}).
+    </div>
+    {% endif %}
+
+    {% if diff_result.error %}
+    <div style="padding:18px 26px"><div style="padding:14px;border-radius:11px;background:var(--crit-soft);color:var(--crit);font-size:13px">{{ diff_result.error }}</div></div>
+    {% elif diff_result.has_changes %}
+    <div class="sc" style="overflow-x:auto;padding:8px 0">
+      {% for hunk in diff_result.hunks %}
+      {% if hunk.context %}<div style="font-family:var(--mono);font-size:11.5px;color:var(--ink-3);padding:8px 26px;background:var(--inset)">{{ hunk.context }}</div>{% endif %}
+      {% for line in hunk.lines %}
+      <div style="display:flex;font-family:var(--mono);font-size:12.5px;line-height:1.7;padding:0 26px;white-space:pre{% if line.type=='add' %};background:var(--good-soft){% elif line.type=='remove' %};background:var(--crit-soft){% endif %}">
+        <span style="width:16px;flex-shrink:0;color:{% if line.type=='add' %}var(--good){% elif line.type=='remove' %}var(--crit){% else %}var(--ink-3){% endif %}">{% if line.type=='add' %}+{% elif line.type=='remove' %}−{% else %} {% endif %}</span>
+        <span style="white-space:pre-wrap;word-break:break-all">{{ line.content }}</span>
+      </div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty"><div class="empty-ic"><i data-lucide="check-circle-2"></i></div><h4>Sem diferenças</h4><p>Os dois backups são idênticos (ignorando linhas voláteis).</p></div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="panel"><div class="empty"><div class="empty-ic"><i data-lucide="git-compare"></i></div><h4>Selecione duas versões</h4><p>Escolha a versão base e a versão a comparar acima.</p></div></div>
+  {% endif %}
+</div>
+{% endblock %}

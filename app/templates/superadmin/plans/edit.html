@@ -1,0 +1,118 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Editar Plano | Super Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page admin-page--narrow">
+    <div class="admin-page-header">
+        <div class="admin-page-header-copy">
+            <h1 class="admin-page-title">Editar plano</h1>
+            <p class="admin-page-subtitle">Atualize precificacao e limites do plano {{ plan.name }}.</p>
+        </div>
+    </div>
+
+    <form method="POST" class="premium-card admin-form-card">
+        {% include 'partials/csrf.html' %}
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+                <label for="name" class="admin-label">Nome do plano</label>
+                <input type="text" name="name" id="name" value="{{ plan.name }}" required class="admin-control">
+            </div>
+            <div>
+                <label for="slug" class="admin-label">Slug</label>
+                <input type="text" name="slug" id="slug" value="{{ plan.slug }}" required class="admin-control">
+            </div>
+            <div class="md:col-span-2">
+                <label for="description" class="admin-label">Descricao</label>
+                <textarea name="description" id="description" rows="3" class="admin-control">{{ plan.description }}</textarea>
+            </div>
+            <div>
+                <label for="price_monthly" class="admin-label">Preco mensal (R$)</label>
+                <input type="number" step="0.01" name="price_monthly" id="price_monthly"
+                    value="{{ (plan.price_monthly / 100) }}" required class="admin-control">
+            </div>
+            <div>
+                <label for="price_yearly" class="admin-label">Preco anual (R$)</label>
+                <input type="number" step="0.01" name="price_yearly" id="price_yearly"
+                    value="{{ (plan.price_yearly / 100) }}" required class="admin-control">
+            </div>
+        </div>
+
+        <div class="admin-form-section">
+            <div class="admin-form-heading">
+                <h2 class="admin-form-title">Limites do plano</h2>
+                <p class="admin-form-copy">Use esse bloco para rever capacidade contratada e politica de trial.</p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div>
+                    <label for="max_devices" class="admin-label">Max. dispositivos</label>
+                    <input type="number" name="max_devices" id="max_devices" value="{{ plan.max_devices }}" required class="admin-control">
+                </div>
+                <div>
+                    <label for="max_users" class="admin-label">Max. usuarios</label>
+                    <input type="number" name="max_users" id="max_users" value="{{ plan.max_users }}" required class="admin-control">
+                </div>
+                <div>
+                    <label for="backup_retention_days" class="admin-label">Retencao (dias)</label>
+                    <input type="number" name="backup_retention_days" id="backup_retention_days"
+                        value="{{ plan.backup_retention_days }}" required class="admin-control">
+                </div>
+                <div>
+                    <label for="trial_days" class="admin-label">Trial (dias)</label>
+                    <input type="number" name="trial_days" id="trial_days"
+                        value="{{ plan.trial_days or 14 }}" required class="admin-control">
+                </div>
+                <div>
+                    <label for="billing_period_days" class="admin-label">Duracao do plano (dias)</label>
+                    <input type="number" name="billing_period_days" id="billing_period_days" min="1"
+                        value="{{ plan.billing_period_days or 30 }}" required class="admin-control">
+                    <p class="admin-help">Ex.: 1 para teste diario, 30 para mensal, 60 para bimestral.</p>
+                </div>
+                <div>
+                    <label for="payment_grace_days" class="admin-label">Dias de aviso apos vencimento</label>
+                    <input type="number" name="payment_grace_days" id="payment_grace_days" min="0"
+                        value="{{ plan.payment_grace_days if plan.payment_grace_days is not none else 3 }}" required class="admin-control">
+                    <p class="admin-help">Apos esse prazo, o cliente e bloqueado automaticamente sem apagar os dados.</p>
+                </div>
+                <div>
+                    <label for="storage_quota_gb" class="admin-label">Storage maximo (GB)</label>
+                    <input type="number" name="storage_quota_gb" id="storage_quota_gb" min="0"
+                        value="{{ plan.storage_quota_gb if plan.storage_quota_gb is not none else 10 }}" required class="admin-control">
+                    <p class="admin-help">0 = ilimitado.</p>
+                </div>
+                <div>
+                    <label for="download_quota_gb_month" class="admin-label">Download mensal (GB)</label>
+                    <input type="number" name="download_quota_gb_month" id="download_quota_gb_month" min="0"
+                        value="{{ plan.download_quota_gb_month if plan.download_quota_gb_month is not none else 20 }}" required class="admin-control">
+                    <p class="admin-help">0 = ilimitado.</p>
+                </div>
+                <div>
+                    <label for="max_download_rate_mbps" class="admin-label">Limite de download (Mbps)</label>
+                    <input type="number" name="max_download_rate_mbps" id="max_download_rate_mbps" min="0"
+                        value="{{ plan.max_download_rate_mbps if plan.max_download_rate_mbps is not none else 0 }}" required class="admin-control">
+                    <p class="admin-help">0 = sem limite aplicado pelo sistema.</p>
+                </div>
+            </div>
+        </div>
+
+        <label class="admin-toggle-card">
+            <input type="checkbox" name="is_active" id="is_active" {% if plan.is_active %}checked{% endif %}
+                class="h-4 w-4 rounded border-[var(--card-border)]">
+            <span class="text-sm">Plano ativo para novas assinaturas.</span>
+        </label>
+
+        <div class="admin-form-actions">
+            <a href="{{ url_for('superadmin_plans.list_plans') }}"
+                class="rounded-lg border border-[var(--card-border)] px-4 py-2.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                Cancelar
+            </a>
+            <button type="submit"
+                class="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                Salvar alteracoes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

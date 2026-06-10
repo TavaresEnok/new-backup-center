@@ -1,0 +1,186 @@
+{% extends "base_redesign.html" %}
+
+{% block title %}Assinatura e faturamento · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Assinatura e faturamento</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/billing/routes.py): tenant, plans, invoices, pending_invoice,
+   payment_ready, current_device_count, plan_capacity, usage_snapshot #}
+<div class="wrap">
+  <div class="page-h">
+    <div class="eyebrow">Conta</div>
+    <h1>Assinatura e faturamento</h1>
+    <p>Seu plano ativo, consumo de recursos, planos disponíveis e histórico de faturas.</p>
+  </div>
+
+  {# ---- Plano atual + Método de pagamento ---- #}
+  <div class="panel" style="display:grid;grid-template-columns:1.4fr 1fr;gap:8px;margin-bottom:30px;overflow:hidden">
+    <div style="padding:32px 36px">
+      <div class="eyebrow">Plano atual</div>
+      <div class="serif" style="font-weight:400;font-size:40px;line-height:1.05;letter-spacing:-.015em;margin:10px 0 4px">
+        {% if tenant.plan %}{{ tenant.plan.name }}{% elif tenant.access_unlimited %}Acesso ilimitado{% else %}Sem plano{% endif %}
+      </div>
+      <div class="row g2 wr" style="margin-bottom:24px">
+        {% if tenant.subscription_status == 'active' %}<span class="tag tag-good"><i data-lucide="check-circle-2"></i>Ativo</span>
+        {% elif tenant.subscription_status == 'trial' %}<span class="tag tag-care">Avaliação</span>
+        {% else %}<span class="tag">{{ (tenant.subscription_status or 'sem status')|title }}</span>{% endif %}
+        <span class="tag"><i data-lucide="calendar"></i>Renova em {{ (tenant.current_period_end|localtime).strftime('%d/%m/%Y') if tenant.current_period_end else 'N/A' }}</span>
+        {% if tenant.access_unlimited %}<span class="tag tag-blue">Acesso ilimitado</span>{% endif %}
+      </div>
+
+      <div class="row g2 ic" style="gap:34px;margin-bottom:24px">
+        <div>
+          <div class="faint" style="font-size:12.5px">Dispositivos cadastrados</div>
+          <div class="serif" style="font-size:28px;line-height:1;margin-top:4px">{{ current_device_count }}</div>
+        </div>
+      </div>
+
+      {# Consumo de storage / download #}
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:7px">
+            <span style="color:var(--ink-2);display:flex;align-items:center;gap:8px"><i data-lucide="database" style="width:14px;height:14px"></i>Armazenamento</span>
+            <span class="mono" style="font-size:12px">{{ usage_snapshot.storage_used_label }} / {{ usage_snapshot.storage_limit_label }}</span>
+          </div>
+          {% if usage_snapshot.storage_limit_bytes > 0 %}
+          <div class="meter"><span style="width:{{ usage_snapshot.storage_usage_pct }}%;background:{% if usage_snapshot.storage_usage_pct > 80 %}var(--care){% else %}var(--pine){% endif %}"></span></div>
+          {% endif %}
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:7px">
+            <span style="color:var(--ink-2);display:flex;align-items:center;gap:8px"><i data-lucide="download" style="width:14px;height:14px"></i>Download {{ usage_snapshot.download_period_key }}</span>
+            <span class="mono" style="font-size:12px">{{ usage_snapshot.download_used_label }} / {{ usage_snapshot.download_limit_label }}</span>
+          </div>
+          {% if usage_snapshot.download_limit_bytes > 0 %}
+          <div class="meter"><span style="width:{{ usage_snapshot.download_usage_pct }}%;background:{% if usage_snapshot.download_usage_pct > 80 %}var(--care){% else %}var(--good){% endif %}"></span></div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--pine-tint);border-left:1px solid var(--line);padding:32px;display:flex;flex-direction:column">
+      <div class="row g2 ic" style="margin-bottom:18px">
+        <span class="gc-ic gi-direct" style="width:40px;height:40px;background:var(--surface)"><i data-lucide="credit-card"></i></span>
+        <div style="font-family:var(--serif);font-size:19px">Método de pagamento</div>
+      </div>
+      {% if payment_ready %}
+      <span class="tag tag-good" style="align-self:flex-start;margin-bottom:12px"><i data-lucide="check"></i>Pagamento online disponível</span>
+      <p style="font-size:13.5px;color:var(--ink-2);line-height:1.6;margin:0 0 18px">Checkout online ativo. Pague faturas pendentes ou contrate um novo plano abaixo.</p>
+      {% if pending_invoice %}
+      <form action="{{ url_for('billing.pay_invoice', tenant_slug=tenant.slug, invoice_id=pending_invoice.id) }}" method="POST" style="margin-top:auto">
+        {% include 'partials/csrf.html' %}
+        <button type="submit" class="btn btn-pine"><i data-lucide="credit-card"></i>Pagar fatura pendente</button>
+      </form>
+      {% endif %}
+      {% else %}
+      <span class="tag tag-care" style="align-self:flex-start;margin-bottom:12px"><i data-lucide="alert-triangle"></i>Indisponível no momento</span>
+      <p style="font-size:13.5px;color:var(--ink-2);line-height:1.6;margin:0">O checkout online está temporariamente indisponível. Para concluir assinatura ou pagamento, fale com o suporte comercial.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Planos disponíveis ---- #}
+  <div class="serif" style="font-size:21px;margin-bottom:14px">Planos disponíveis</div>
+  <p style="font-size:13.5px;color:var(--ink-3);margin:0 0 18px">Escolha o plano ideal para o seu negócio.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:34px">
+    {% for plan in plans %}
+    {% set is_current = (tenant.plan_id == plan.id) %}
+    {% set plan_info = plan_capacity.get(plan.id|string, {}) %}
+    {% set eligible = plan_info.get('eligible', True) %}
+    <article class="panel" style="display:flex;flex-direction:column;padding:24px 24px 22px;{% if is_current %}border-color:var(--pine);box-shadow:0 0 0 1px var(--pine) inset{% endif %}">
+      <div style="margin-bottom:16px">
+        <div class="row g2 ic" style="justify-content:space-between">
+          <div style="font-family:var(--serif);font-size:22px;line-height:1.1">{{ plan.name }}</div>
+          {% if is_current %}<span class="tag tag-good"><i data-lucide="check"></i>Atual</span>{% endif %}
+        </div>
+        {% if plan.description %}<p style="font-size:12.5px;color:var(--ink-3);margin:6px 0 0">{{ plan.description }}</p>{% endif %}
+      </div>
+
+      <div style="margin-bottom:18px">
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span class="mono" style="font-size:32px;font-weight:600">R$ {{ "%.2f"|format(plan.price_monthly/100) }}</span>
+          <span style="font-size:13px;color:var(--ink-3)">/mês</span>
+        </div>
+        {% if plan.price_yearly > 0 %}<p style="font-size:12.5px;color:var(--ink-3);margin:6px 0 0">ou R$ {{ "%.2f"|format(plan.price_yearly/100) }}/ano</p>{% endif %}
+      </div>
+
+      {% set feats = [
+        (plan.max_devices ~ ' dispositivos'),
+        (plan.max_users ~ ' usuários'),
+        ('Retenção ' ~ plan.backup_retention_days ~ ' dias'),
+        ('Storage: ' ~ (plan.storage_quota_gb ~ ' GB' if (plan.storage_quota_gb or 0) > 0 else 'Ilimitado')),
+        ('Download/mês: ' ~ (plan.download_quota_gb_month ~ ' GB' if (plan.download_quota_gb_month or 0) > 0 else 'Ilimitado')),
+        ('Velocidade: ' ~ (plan.max_download_rate_mbps ~ ' Mbps' if (plan.max_download_rate_mbps or 0) > 0 else 'Ilimitada')),
+        ('Ciclo de cobrança: ' ~ (plan.billing_period_days or 30) ~ ' dia(s)')
+      ] %}
+      <ul style="list-style:none;margin:0 0 20px;padding:0;display:flex;flex-direction:column;gap:11px;flex:1">
+        {% for f in feats %}
+        <li style="display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-2)"><i data-lucide="check-circle" style="width:17px;height:17px;color:var(--good);flex-shrink:0"></i>{{ f }}</li>
+        {% endfor %}
+        {% if plan.features %}{% for feature, enabled in plan.features.items() %}{% if enabled %}
+        <li style="display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-2)"><i data-lucide="check-circle" style="width:17px;height:17px;color:var(--good);flex-shrink:0"></i>{{ feature|replace('_', ' ')|title }}</li>
+        {% endif %}{% endfor %}{% endif %}
+      </ul>
+
+      {% if not eligible %}
+      <div style="margin-bottom:14px;border:1px solid var(--care-soft);background:var(--care-soft);color:var(--care);border-radius:var(--r1);padding:10px 13px;font-size:12.5px">{{ plan_info.reason }}</div>
+      {% endif %}
+
+      <form action="{{ url_for('billing.subscribe', tenant_slug=tenant.slug, plan_id=plan.id) }}" method="POST">
+        {% include 'partials/csrf.html' %}
+        <input type="hidden" name="billing_cycle" value="monthly">
+        {% if is_current %}
+        <button type="button" class="btn btn-line" style="width:100%;justify-content:center" disabled><i data-lucide="check"></i>Plano atual</button>
+        {% elif not eligible %}
+        <button type="button" class="btn btn-line" style="width:100%;justify-content:center" disabled>Limite insuficiente</button>
+        {% elif not payment_ready %}
+        <button type="button" class="btn btn-line" style="width:100%;justify-content:center" disabled>Indisponível no momento</button>
+        {% else %}
+        <button type="submit" class="btn btn-pine" style="width:100%;justify-content:center"><i data-lucide="arrow-up-circle"></i>Assinar online</button>
+        {% endif %}
+      </form>
+    </article>
+    {% endfor %}
+  </div>
+
+  {# ---- Histórico de faturas ---- #}
+  <div class="serif" style="font-size:21px;margin-bottom:14px">Histórico de faturas</div>
+  <div class="panel">
+    <div style="overflow-x:auto"><table class="tbl">
+      <thead><tr>
+        <th class="col-name">Data</th>
+        <th>Valor</th>
+        <th>Status</th>
+        <th style="text-align:right">Ações</th>
+      </tr></thead>
+      <tbody>
+        {% for invoice in invoices %}
+        {% set invoice_status = invoice.status.value if invoice.status and invoice.status.value is defined else invoice.status|string %}
+        <tr>
+          <td class="col-name"><span class="mono" style="font-size:12.5px">{{ (invoice.created_at|localtime).strftime('%d/%m/%Y') }}</span></td>
+          <td class="mono" style="font-size:14px">R$ {{ "%.2f"|format(invoice.amount/100) }}</td>
+          <td>
+            {% if invoice_status == 'paid' %}<span class="tag tag-good"><i data-lucide="check"></i>Paga</span>
+            {% elif invoice_status == 'pending' %}<span class="tag tag-care">Pendente</span>
+            {% else %}<span class="tag">{{ invoice_status|replace('_', ' ')|title }}</span>{% endif %}
+          </td>
+          <td>
+            <div class="row g2" style="justify-content:flex-end">
+              {% if invoice_status == 'pending' and payment_ready %}
+              <form action="{{ url_for('billing.pay_invoice', tenant_slug=tenant.slug, invoice_id=invoice.id) }}" method="POST">
+                {% include 'partials/csrf.html' %}
+                <button type="submit" class="btn btn-soft btn-sm"><i data-lucide="credit-card"></i>Pagar agora</button>
+              </form>
+              {% else %}<span class="faint">—</span>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4"><div class="empty"><div class="empty-ic"><i data-lucide="file-x"></i></div><h4>Nenhuma fatura</h4><p>O histórico aparecerá aqui após o primeiro ciclo de cobrança.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

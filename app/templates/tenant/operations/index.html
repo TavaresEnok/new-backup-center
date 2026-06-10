@@ -1,0 +1,228 @@
+{% extends "base_redesign.html" %}
+{% block title %}Grupos · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Grupos</b>{% endblock %}
+
+{% block head %}
+<style>
+  .ops-hidden{display:none !important}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/operations.py index): tenant, summary{total_groups,active_groups,
+   inactive_groups,vpn_groups,jump_groups,no_vpn_groups}, group_rows[{id,name,is_active,uses_vpn,
+   uses_jump_host,total_devices,devices_success,devices_failed,devices_unknown}], group_filter, can_manage_admin #}
+{% set role = session.get('user_role', '') %}
+{% set can_manage_admin = (can_manage_admin if can_manage_admin is defined else false) or role in ['super_admin', 'tenant_owner', 'tenant_admin'] %}
+<div class="wrap">
+  <div class="page-h head-row">
+    <div>
+      <div class="eyebrow">{{ summary.total_groups }} grupos · {{ group_rows|sum(attribute='total_devices') if group_rows else 0 }} dispositivos</div>
+      <h1>Grupos</h1>
+      <p>Seus dispositivos organizados por provedor ou localização. Veja de relance a saúde de cada grupo e acesse dispositivos, VPN e edição.</p>
+    </div>
+    <div class="actions">
+      <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-line"><i data-lucide="server"></i>Dispositivos</a>
+      {% if can_manage_admin %}<a href="{{ url_for('tenant_groups.add_group', tenant_slug=tenant.slug) }}" class="btn btn-pine"><i data-lucide="plus"></i>Novo grupo</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="panel summary">
+    <div class="sm"><div class="n">{{ summary.total_groups }}</div><div class="l">grupos</div></div>
+    <div class="sm"><div class="n" style="color:var(--good)">{{ summary.active_groups }}</div><div class="l">ativos</div></div>
+    <div class="sm"><div class="n" style="color:var(--ink-3)">{{ summary.inactive_groups }}</div><div class="l">inativos</div></div>
+    <div class="sm"><div class="n" style="color:var(--lilac)">{{ summary.vpn_groups }}</div><div class="l">via VPN</div></div>
+    <div class="sm"><div class="n" style="color:var(--calm-blue)">{{ summary.jump_groups }}</div><div class="l">via Jump Host</div></div>
+  </div>
+
+  <div class="bar">
+    <div class="field"><i data-lucide="search"></i><input id="groupSearchInput" type="text" value="{{ request.args.get('q', '') }}" placeholder="Buscar grupo ou provedor…"></div>
+  </div>
+
+  <div class="filt-row">
+    <span class="flbl"><i data-lucide="filter"></i>Filtrar:</span>
+    <div class="seg" id="groupStatusSeg">
+      <button type="button" class="ops-filter-btn" data-filter="ALL">Todos <span class="c">{{ summary.total_groups }}</span></button>
+      <button type="button" class="ops-filter-btn" data-filter="ACTIVE">Ativos <span class="c">{{ summary.active_groups }}</span></button>
+      <button type="button" class="ops-filter-btn" data-filter="INACTIVE">Inativos <span class="c">{{ summary.inactive_groups }}</span></button>
+    </div>
+    <div class="seg" id="groupConnSeg">
+      <button type="button" class="ops-filter-btn" data-filter="ALL">Todas conexões</button>
+      <button type="button" class="ops-filter-btn" data-filter="VPN">VPN <span class="c">{{ summary.vpn_groups }}</span></button>
+      <button type="button" class="ops-filter-btn" data-filter="JUMP_HOST">Jump Host <span class="c">{{ summary.jump_groups }}</span></button>
+      <button type="button" class="ops-filter-btn" data-filter="NO_VPN">Sem VPN <span class="c">{{ summary.no_vpn_groups }}</span></button>
+    </div>
+    <span id="groupVisibleCount" class="vcount"></span>
+  </div>
+
+  {% if group_rows %}
+  <div id="groupsGrid" class="gcgrid">
+    {% for row in group_rows %}
+    {% set success_count = row.devices_success if row.devices_success is defined and row.devices_success is not none else (row.success_24h if row.success_24h is defined and row.success_24h is not none else 0) %}
+    {% set failed_count = row.devices_failed if row.devices_failed is defined and row.devices_failed is not none else (row.failed_24h if row.failed_24h is defined and row.failed_24h is not none else 0) %}
+    {% set unknown_count = row.devices_unknown if row.devices_unknown is defined and row.devices_unknown is not none else ([row.total_devices - success_count - failed_count, 0]|max) %}
+    {% set conn_key = 'vpn' if row.uses_vpn else ('jump' if row.uses_jump_host else 'direct') %}
+    {% set conn_label = 'VPN' if row.uses_vpn else ('Jump Host' if row.uses_jump_host else 'Direto') %}
+    {% set conn_icon = 'shield-check' if row.uses_vpn else ('git-branch' if row.uses_jump_host else 'arrow-right-left') %}
+    <article class="panel gc ops-card {% if not row.is_active %}inactive{% endif %} {% if failed_count > 0 %}has-fail{% endif %}"
+             data-group-name="{{ row.name|lower }}" data-group-active="{{ 1 if row.is_active else 0 }}"
+             data-group-vpn="{{ 1 if row.uses_vpn else 0 }}" data-group-jump="{{ 1 if row.uses_jump_host else 0 }}" data-group-no-vpn="{{ 0 if row.uses_vpn else 1 }}">
+      <div class="gc-head">
+        <span class="gc-ic gi-{{ conn_key }}"><i data-lucide="{{ conn_icon }}"></i></span>
+        <div style="flex:1;min-width:0">
+          <div class="gc-name" title="{{ row.name }}">{{ row.name }}</div>
+          <div class="row g2 ic wr" style="margin-top:7px">
+            {% if not row.is_active %}<span class="tag tag-care">Inativo</span>{% endif %}
+            <span class="tag {% if row.uses_vpn %}tag-lilac{% elif row.uses_jump_host %}tag-blue{% endif %}">{{ conn_label }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gc-mets">
+        <div class="gc-met"><div class="l">Total</div><div class="v">{{ row.total_devices }}</div></div>
+        <div class="gc-met ok"><div class="l">Sucesso</div><div class="v">{{ success_count }}</div></div>
+        <div class="gc-met fail {% if failed_count > 0 %}on{% endif %}"><div class="l">Falha</div><div class="v">{{ failed_count }}</div></div>
+        <div class="gc-met unknown"><div class="l">S/ status</div><div class="v">{{ unknown_count }}</div></div>
+      </div>
+
+      <div class="gc-conn {% if row.uses_vpn %}vpn{% endif %}">
+        <i data-lucide="{{ 'shield' if row.uses_vpn else ('git-branch' if row.uses_jump_host else 'cable') }}"></i>
+        {% if row.uses_vpn %}Acesso via VPN — monitoramento pelo túnel{% elif row.uses_jump_host %}Acesso via Jump Host — salto SSH intermediário{% else %}Acesso direto — sem intermediário{% endif %}
+      </div>
+
+      <div class="gc-foot">
+        {% if row.id %}
+        <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, group_id=row.id) }}" class="btn btn-line btn-sm"><i data-lucide="server"></i>Dispositivos</a>
+        {% if can_manage_admin and row.uses_vpn and row.is_active %}
+        <form id="form-test-vpn-group-{{ row.id }}" action="{{ url_for('tenant_groups.test_group_vpn', tenant_slug=tenant.slug, group_id=row.id) }}" method="POST" style="display:inline">
+          {% include 'partials/csrf.html' %}
+          <button type="button" data-run-backup-live data-form-id="form-test-vpn-group-{{ row.id }}" class="btn btn-soft btn-sm"><i data-lucide="shield-check"></i>Testar VPN</button>
+        </form>
+        {% elif can_manage_admin and row.uses_jump_host and row.is_active %}
+        <form id="form-test-jump-group-{{ row.id }}" action="{{ url_for('tenant_groups.diagnose_group_jump', tenant_slug=tenant.slug, group_id=row.id) }}" method="POST" style="display:inline">
+          {% include 'partials/csrf.html' %}
+          <button type="button" data-run-backup-live data-form-id="form-test-jump-group-{{ row.id }}" class="btn btn-soft btn-sm"><i data-lucide="shield-check"></i>Testar Jump Host</button>
+        </form>
+        {% endif %}
+        <span class="spacer"></span>
+        {% if can_manage_admin %}<a href="{{ url_for('tenant_groups.edit_group', tenant_slug=tenant.slug, group_id=row.id) }}" class="btn btn-ghost btn-sm"><i data-lucide="settings-2"></i>Editar grupo</a>{% endif %}
+        {% else %}
+        <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-line btn-sm"><i data-lucide="server"></i>Dispositivos</a>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+  <div id="groupsPagination" class="ops-pagination" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:22px">
+    <span id="groupsPageInfo" class="faint" style="font-size:12.5px"></span>
+    <div id="groupsPageLinks" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></div>
+  </div>
+
+  <div id="groupFilterEmptyState" class="ops-hidden">
+    <div class="panel"><div class="empty"><div class="empty-ic"><i data-lucide="search-x"></i></div><h4>Nenhum grupo encontrado</h4><p>Nenhum grupo corresponde aos filtros atuais.</p><button id="clearGroupFiltersBtn" type="button" class="btn btn-line btn-sm" style="margin-top:10px">Limpar filtros</button></div></div>
+  </div>
+  {% else %}
+  <div class="panel"><div class="empty"><div class="empty-ic"><i data-lucide="folder-tree"></i></div><h4>Nenhum grupo cadastrado</h4><p>Crie seu primeiro grupo para organizar os dispositivos.</p>{% if can_manage_admin %}<a href="{{ url_for('tenant_groups.add_group', tenant_slug=tenant.slug) }}" class="btn btn-pine" style="margin-top:12px"><i data-lucide="plus"></i>Criar primeiro grupo</a>{% endif %}</div></div>
+  {% endif %}
+</div>
+
+{% include 'partials/backup_live_modal.html' %}
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('groupSearchInput');
+    const visibleCount = document.getElementById('groupVisibleCount');
+    const emptyState = document.getElementById('groupFilterEmptyState');
+    const clearFiltersBtn = document.getElementById('clearGroupFiltersBtn');
+    const pagination = document.getElementById('groupsPagination');
+    const pageInfo = document.getElementById('groupsPageInfo');
+    const pageLinks = document.getElementById('groupsPageLinks');
+    const items = Array.from(document.querySelectorAll('.ops-card[data-group-name]'));
+    const filterButtons = Array.from(document.querySelectorAll('.ops-filter-btn'));
+    const PAGE_SIZE = 24;
+    let currentPage = 1;
+    if (!searchInput || items.length === 0 || filterButtons.length === 0) {
+      if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
+      return;
+    }
+    const mapServerFilterToClient = { all:'ALL', vpn:'VPN', jump:'JUMP_HOST', no_vpn:'NO_VPN' };
+    let activeStatus = 'ALL';
+    let activeConnection = mapServerFilterToClient['{{ group_filter|default("all") }}'] || 'ALL';
+    function normalize(v){ return (v||'').toString().toLowerCase().trim(); }
+    function matchesStatus(item){
+      if (activeStatus === 'ACTIVE') return item.dataset.groupActive === '1';
+      if (activeStatus === 'INACTIVE') return item.dataset.groupActive === '0';
+      return true;
+    }
+    function matchesConnection(item){
+      switch(activeConnection){
+        case 'VPN': return item.dataset.groupVpn === '1';
+        case 'JUMP_HOST': return item.dataset.groupJump === '1';
+        case 'NO_VPN': return item.dataset.groupNoVpn === '1';
+        default: return true;
+      }
+    }
+    function syncButtons(){
+      filterButtons.forEach(function(b){
+        const filter = b.dataset.filter || 'ALL';
+        const inStatusSeg = b.closest('#groupStatusSeg');
+        b.classList.toggle('on', inStatusSeg ? filter === activeStatus : filter === activeConnection);
+      });
+    }
+    function renderPage(matched){
+      const total = matched.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      matched.forEach(function(item, idx){ item.style.display = (idx >= start && idx < end) ? '' : 'none'; });
+      if (pageInfo) pageInfo.textContent = total ? ('Página ' + currentPage + ' de ' + totalPages + ' · ' + total + ' grupo(s)') : '';
+      if (pageLinks){
+        pageLinks.innerHTML = '';
+        if (totalPages > 1){
+          const mk = function(label, page, isCurrent){
+            const el = document.createElement(isCurrent ? 'span' : 'button');
+            if (!isCurrent) el.type = 'button';
+            el.className = 'btn btn-sm ' + (isCurrent ? 'btn-pine' : 'btn-ghost');
+            el.textContent = label;
+            if (!isCurrent) el.addEventListener('click', function(){ currentPage = page; renderPage(matched); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+            return el;
+          };
+          if (currentPage > 1) pageLinks.appendChild(mk('Anterior', currentPage - 1, false));
+          const pStart = Math.max(1, currentPage - 2);
+          const pEnd = Math.min(totalPages, currentPage + 2);
+          for (let p = pStart; p <= pEnd; p++) pageLinks.appendChild(mk(String(p), p, p === currentPage));
+          if (currentPage < totalPages) pageLinks.appendChild(mk('Próxima', currentPage + 1, false));
+        }
+      }
+      if (pagination) pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+    function applyFilters(resetPage){
+      if (resetPage) currentPage = 1;
+      const term = normalize(searchInput.value);
+      const matched = [];
+      items.forEach(function(item){
+        const isMatch = (!term || normalize(item.dataset.groupName).includes(term)) && matchesStatus(item) && matchesConnection(item);
+        if (isMatch) matched.push(item); else item.style.display = 'none';
+      });
+      syncButtons();
+      if (visibleCount) visibleCount.textContent = matched.length + ' de ' + items.length + ' grupos';
+      if (emptyState) emptyState.classList.toggle('ops-hidden', matched.length !== 0);
+      renderPage(matched);
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+    }
+    filterButtons.forEach(function(b){
+      b.addEventListener('click', function(){
+        if (b.closest('#groupStatusSeg')) activeStatus = b.dataset.filter || 'ALL';
+        else activeConnection = b.dataset.filter || 'ALL';
+        applyFilters(true);
+      });
+    });
+    searchInput.addEventListener('input', function(){ applyFilters(true); });
+    if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', function(){ searchInput.value=''; activeStatus='ALL'; activeConnection='ALL'; applyFilters(true); });
+    applyFilters(true);
+  });
+</script>
+{% endblock %}

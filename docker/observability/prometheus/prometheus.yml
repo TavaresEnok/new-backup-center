@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: backup_center_app_metrics
+    metrics_path: /internal/metrics/backups
+    http_headers:
+      X-Forwarded-Proto:
+        values: ["https"]
+    static_configs:
+      - targets: ["app:8000"]
+        labels:
+          service: backup_sys_app
+
+  - job_name: flower_metrics
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["flower:5555"]
+        labels:
+          service: backup_sys_flower

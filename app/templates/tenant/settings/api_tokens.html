@@ -1,0 +1,67 @@
+{% extends "base_redesign.html" %}
+{% block title %}API Tokens · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant.slug) }}">Configurações</a><i data-lucide="chevron-right"></i><b>API Tokens</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/api_tokens.py list_tokens): tenant, tokens[{id,name,token_prefix,
+   is_active,is_expired,created_at,last_used_at,expires_at}], new_token, new_token_name #}
+<div class="wrap">
+  <div class="page-h"><div class="eyebrow">Conta</div><h1>API Tokens</h1><p>Chaves para integrações externas acessarem a API do Backup Center.</p></div>
+  <div class="set-grid" style="display:grid;grid-template-columns:240px 1fr;gap:26px;align-items:start">
+    {% set settings_section = 'api_tokens' %}{% include 'partials/settings_nav_redesign.html' %}
+    <div style="display:flex;flex-direction:column;gap:22px">
+
+      {% if new_token %}
+      <div class="panel panel-pad" style="border-color:var(--good);background:var(--good-soft)">
+        <div style="font-weight:600;color:var(--good);margin-bottom:6px"><i data-lucide="check-circle-2"></i> Token "{{ new_token_name }}" criado!</div>
+        <p style="font-size:12.5px;color:var(--good);margin-bottom:10px"><strong>Copie agora.</strong> Por segurança, ele não será exibido novamente.</p>
+        <div style="display:flex;gap:8px;align-items:center">
+          <code id="new-token-value" style="flex:1;font-family:var(--mono);font-size:12.5px;background:var(--card);border:1px solid var(--good);border-radius:8px;padding:10px 12px;word-break:break-all">{{ new_token }}</code>
+          <button type="button" class="btn btn-line btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('new-token-value').textContent);this.innerText='Copiado'"><i data-lucide="copy"></i>Copiar</button>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="panel panel-pad">
+        <div style="font-family:var(--serif);font-size:19px;margin-bottom:14px">Gerar novo token</div>
+        <form method="POST" action="{{ url_for('api_tokens.create_token', tenant_slug=tenant.slug) }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          {% include 'partials/csrf.html' %}
+          <input type="text" name="name" placeholder="Nome do sistema (ex.: AjustERP, MonitorX)" required class="inp" style="flex:1;min-width:220px">
+          <button type="submit" class="btn btn-pine"><i data-lucide="plus"></i>Gerar</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3><i data-lucide="key"></i>Tokens ativos</h3><span class="tag">{{ tokens|length }}</span></div>
+        <div>
+          {% for token in tokens %}
+          <div style="display:flex;align-items:center;gap:14px;padding:16px 26px;border-bottom:1px solid var(--line);flex-wrap:wrap;{% if not token.is_active %}opacity:.55{% endif %}">
+            <span style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex-shrink:0;background:{% if token.is_active and not token.is_expired %}var(--pine-soft);color:var(--pine){% else %}var(--inset);color:var(--ink-3){% endif %}"><i data-lucide="key"></i></span>
+            <div style="flex:1;min-width:160px">
+              <div style="font-weight:600;font-size:13.5px">{{ token.name }}
+                {% if not token.is_active %}<span class="tag" style="margin-left:6px">Revogado</span>{% elif token.is_expired %}<span class="tag tag-care" style="margin-left:6px">Expirado</span>{% endif %}
+              </div>
+              <div class="faint" style="font-size:11.5px;margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
+                <span class="mono" style="font-family:var(--mono)">{{ token.token_prefix }}••••••••</span>
+                <span>Criado {{ (token.created_at|localtime).strftime('%d/%m/%Y') if token.created_at else '—' }}</span>
+                {% if token.last_used_at %}<span>Último uso: {{ (token.last_used_at|localtime).strftime('%d/%m %H:%M') }}</span>{% endif %}
+                {% if token.expires_at %}<span>Expira: {{ (token.expires_at|localtime).strftime('%d/%m/%Y') }}</span>{% endif %}
+              </div>
+            </div>
+            {% if token.is_active %}
+            <form method="POST" action="{{ url_for('api_tokens.revoke_token', tenant_slug=tenant.slug, token_id=token.id) }}" onsubmit="return confirm('Revogar o token \'{{ token.name }}\'? Esta ação não pode ser desfeita.')">
+              {% include 'partials/csrf.html' %}
+              <button type="submit" class="act bad" title="Revogar"><i data-lucide="trash-2"></i></button>
+            </form>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="empty"><div class="empty-ic"><i data-lucide="key"></i></div><h4>Nenhum token</h4><p>Gere um token para integrar sistemas externos.</p></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>@media (max-width:860px){ .set-grid{grid-template-columns:1fr !important} }</style>
+{% endblock %}

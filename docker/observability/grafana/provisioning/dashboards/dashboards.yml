@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Backup Center
+    orgId: 1
+    folder: Backup Center
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

@@ -1,0 +1,97 @@
+{% extends "base_redesign.html" %}
+{% block title %}Backup · {{ backup.device.name if backup.device else '' }} · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}">Histórico</a><i data-lucide="chevron-right"></i><b>Detalhes</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/backups.py view_backup): tenant, backup.
+   Campos reais do Backup: device{name,ip_address,port,type.name,id}, status_value,
+   created_at, file_size_bytes, duration_seconds, error_message, file_path, hash_sha256, id #}
+{% set s = backup.status_value|default('') %}
+
+<div class="wrap">
+  <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm" style="margin-bottom:18px"><i data-lucide="arrow-left"></i>Voltar ao histórico</a>
+
+  <div class="panel" style="display:flex;align-items:center;gap:20px;padding:28px;margin-bottom:22px;flex-wrap:wrap">
+    <span style="width:56px;height:56px;border-radius:16px;display:grid;place-items:center;flex-shrink:0;background:{% if s=='success' %}var(--good-soft){% else %}var(--care-soft){% endif %};color:{% if s=='success' %}var(--good){% else %}var(--care){% endif %}">
+      <i data-lucide="{{ 'check-circle-2' if s=='success' else 'alert-triangle' }}" style="width:26px;height:26px;stroke-width:1.6"></i>
+    </span>
+    <div style="flex:1;min-width:0">
+      <div class="row g2 ic wr" style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
+        {% if s=='success' %}<span class="tag tag-good"><i data-lucide="check"></i>Concluído</span>{% else %}<span class="tag tag-care"><i data-lucide="alert-triangle"></i>Falha</span>{% endif %}
+        {% if backup.device and backup.device.type %}<span class="tag">{{ backup.device.type.name }}</span>{% endif %}
+      </div>
+      <h1 style="font-family:var(--serif);font-weight:400;font-size:22px;letter-spacing:-.015em;margin:0;line-height:1.1">
+        {{ backup.device.name if backup.device else 'Dispositivo removido' }}
+      </h1>
+      <div class="muted" style="font-size:13.5px;margin-top:6px;font-family:var(--mono)">
+        {{ (backup.created_at|localtime).strftime('%d/%m/%Y às %H:%M:%S') if backup.created_at else '—' }}
+      </div>
+    </div>
+    <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap">
+      {% if backup.device %}
+      <a href="{{ url_for('tenant_compare.compare_backups', tenant_slug=tenant.slug, device_id=backup.device.id) }}" class="btn btn-line"><i data-lucide="git-compare"></i>Comparar</a>
+      {% endif %}
+      {% if backup.file_path %}
+      <a href="{{ url_for('tenant_backups.download_backup', tenant_slug=tenant.slug, backup_id=backup.id) }}" class="btn btn-pine"><i data-lucide="download"></i>Download</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bk-cols" style="display:grid;grid-template-columns:1fr 2fr;gap:22px">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div class="panel panel-pad">
+        <div style="font-size:13px;color:var(--ink-2);margin-bottom:14px">Metadados</div>
+        {% set size_lbl = ((backup.file_size_bytes/1048576)|round(2)|string ~ ' MB') if backup.file_size_bytes and backup.file_size_bytes > 1048576 else (((backup.file_size_bytes/1024)|round(1)|string ~ ' KB') if backup.file_size_bytes else '—') %}
+        {% for icon,label,value in [
+          ('activity','Status', backup.status_value|title if backup.status_value else '—'),
+          ('clock','Duração', (backup.duration_seconds|string ~ ' s') if backup.duration_seconds else '—'),
+          ('database','Tamanho', size_lbl),
+          ('server','IP',  backup.device.ip_address if backup.device else '—'),
+          ('plug','Porta', backup.device.port|string if backup.device and backup.device.port else '—')
+        ] %}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line);gap:12px">
+          <span style="font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:9px">
+            <i data-lucide="{{ icon }}" style="width:15px;height:15px;color:var(--ink-3)"></i>{{ label }}
+          </span>
+          <span class="mono" style="font-size:13px;font-weight:500;font-family:var(--mono)">{{ value }}</span>
+        </div>
+        {% endfor %}
+        {% if backup.error_message %}
+        <div style="margin-top:16px;padding:14px;background:var(--care-soft);border-radius:11px">
+          <div style="font-size:11px;font-weight:700;color:var(--care);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Motivo da falha</div>
+          <div style="font-size:13px;color:var(--care);font-family:var(--mono)">{{ backup.error_message }}</div>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if backup.device %}
+      <div class="panel panel-pad">
+        <div style="font-size:13px;color:var(--ink-2);margin-bottom:14px">Ações</div>
+        <a href="{{ url_for('tenant_devices.run_backup', tenant_slug=tenant.slug, device_id=backup.device.id) }}" class="btn btn-line btn-sm" style="width:100%;justify-content:center;margin-bottom:10px"><i data-lucide="refresh-cw"></i>Executar novo backup</a>
+        <a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=backup.device.id) }}" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center"><i data-lucide="server"></i>Ver dispositivo</a>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="panel panel-pad">
+      <div style="font-size:13px;color:var(--ink-2);margin-bottom:14px">Arquivo</div>
+      {% if backup.file_path %}
+      <div style="padding:14px 0;border-bottom:1px solid var(--line)">
+        <div class="faint" style="font-size:11.5px;margin-bottom:4px">Arquivo salvo</div>
+        <div class="mono" style="font-family:var(--mono);font-size:13px;word-break:break-all">{{ backup.file_path.split('/')[-1].split('\\')[-1] }}</div>
+      </div>
+      {% if backup.hash_sha256 %}
+      <div style="padding:14px 0">
+        <div class="faint" style="font-size:11.5px;margin-bottom:4px">SHA-256</div>
+        <div class="mono" style="font-family:var(--mono);font-size:12px;color:var(--ink-3);word-break:break-all">{{ backup.hash_sha256 }}</div>
+      </div>
+      {% endif %}
+      <a href="{{ url_for('tenant_backups.download_backup', tenant_slug=tenant.slug, backup_id=backup.id) }}" class="btn btn-pine btn-sm" style="margin-top:10px"><i data-lucide="download"></i>Baixar arquivo</a>
+      {% else %}
+      <div class="empty"><div class="empty-ic"><i data-lucide="file-x"></i></div><h4>Sem arquivo</h4><p>{% if s=='success' %}Nenhum arquivo associado a este backup.{% else %}O backup falhou — verifique o motivo da falha ao lado.{% endif %}</p></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<style>@media (max-width:900px){ .bk-cols{grid-template-columns:1fr !important} }</style>
+{% endblock %}

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Backup Center - Documentação Interativa</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+        
+        .content {
+            padding: 60px 40px;
+        }
+        
+        .auth-section {
+            background: #f0f4ff;
+            border-left: 5px solid #667eea;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 50px;
+        }
+        
+        .auth-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .auth-section p {
+            margin-bottom: 12px;
+            font-size: 0.95em;
+        }
+        
+        .code-block {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        
+        .steps {
+            display: grid;
+            gap: 40px;
+            margin-top: 50px;
+        }
+        
+        .step {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            gap: 30px;
+            align-items: start;
+            padding-bottom: 40px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .step:last-child {
+            border-bottom: none;
+        }
+        
+        .step-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            font-size: 2em;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        
+        .step-content h3 {
+            color: #667eea;
+            font-size: 1.4em;
+            margin-bottom: 15px;
+        }
+        
+        .step-content p {
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+        
+        .endpoint {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+        
+        .get {
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        
+        .success-box {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .highlight {
+            background: #fef08a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        
+        .response-example {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+        }
+        
+        .json {
+            color: #333;
+        }
+        
+        .json-key {
+            color: #d73a49;
+        }
+        
+        .json-string {
+            color: #032f62;
+        }
+        
+        .json-number {
+            color: #005cc5;
+        }
+        
+        .json-bool {
+            color: #d73a49;
+        }
+        
+        .footer {
+            background: #f9fafb;
+            padding: 30px 40px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .step {
+                grid-template-columns: 1fr;
+            }
+            
+            .step-number {
+                width: 60px;
+                height: 60px;
+                font-size: 1.5em;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 API do Backup Center</h1>
+            <p>Documentação Interativa e Simples</p>
+        </div>
+        
+        <div class="content">
+            <!-- Autenticação -->
+            <div class="auth-section">
+                <h2>🔑 Como Começar</h2>
+                <p>Você precisa de um <span class="highlight">Token de API</span> para usar esta API. Não tem um ainda?</p>
+                <p><strong>Crie um token em:</strong> Configurações → API Tokens</p>
+                <p style="margin-top: 20px;"><strong>Depois, use o token no header:</strong></p>
+                <div class="code-block">Authorization: Bearer bc_seu_token_aqui</div>
+            </div>
+            
+            <!-- Passos -->
+            <h2 style="color: #667eea; margin-bottom: 40px; font-size: 1.8em;">📋 3 Passos para Integrar</h2>
+            
+            <div class="steps">
+                <!-- Passo 1 -->
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Encontre seus Grupos (Pastas/Clientes)</h3>
+                        <p>Esta chamada retorna a lista de <strong>todos os grupos/pastas</strong> que seu token pode acessar.</p>
+                        
+                        <div class="endpoint">
+                            <span class="get">GET</span> /api/v1/external/groups
+                        </div>
+                        
+                        <div class="info-box">
+                            <strong>ℹ️ O que procurar na resposta:</strong> Cada grupo terá um campo <span class="highlight">"id"</span> (um código UUID). O <span class="highlight">device_count</span> considera apenas dispositivos cujo último backup está em sucesso.
+                        </div>
+                        
+                        <p><strong>Exemplo de resposta:</strong></p>
+                        <div class="response-example">
+{
+  <span class="json-key">"total"</span>: <span class="json-number">2</span>,
+  <span class="json-key">"groups"</span>: [
+    {
+      <span class="json-key">"id"</span>: <span class="json-string">"91d21c58-dc9c-4e39-b008-b6ff7aa7f53a"</span>,
+      <span class="json-key">"name"</span>: <span class="json-string">"Flashnet"</span>,
+      <span class="json-key">"device_count"</span>: <span class="json-number">10</span>,
+      <span class="json-key">"last_backup_at"</span>: <span class="json-string">"2026-05-14T10:30:00"</span>
+    }
+  ]
+}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Passo 2 -->
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Veja os Backups de um Grupo</h3>
+                        <p>Agora use o <span class="highlight">ID do grupo</span> do Passo 1 para listar os backups disponíveis dos dispositivos cujo último backup está em sucesso.</p>
+                        
+                        <div class="endpoint">
+                            <span class="get">GET</span> /api/v1/external/groups/{GROUP_ID}/backups?status=success
+                        </div>
+                        
+                        <p style="margin-top: 15px;"><strong>Parâmetros:</strong></p>
+                        <ul style="margin-left: 20px;">
+                            <li><span class="highlight">GROUP_ID</span> → Copie o ID do Passo 1</li>
+                            <li><span class="highlight">status</span> → Use "success" para ver apenas backups bem-sucedidos; dispositivos cujo último backup falhou não são expostos</li>
+                            <li><span class="highlight">page</span> → Para paginação (padrão: 1)</li>
+                            <li><span class="highlight">per_page</span> → Quantos por página (padrão: 50, máximo: 200)</li>
+                        </ul>
+                        
+                        <div class="info-box">
+                            <strong>ℹ️ O que procurar na resposta:</strong> Procure o campo <span class="highlight">"id"</span> (do backup) e <span class="highlight">"device_id"</span>. Estes são os identificadores únicos que você usará no Passo 3.
+                        </div>
+                        
+                        <p style="margin-top: 15px;"><strong>Exemplo de resposta:</strong></p>
+                        <div class="response-example">
+{
+  <span class="json-key">"group"</span>: <span class="json-string">"Flashnet"</span>,
+  <span class="json-key">"page"</span>: <span class="json-number">1</span>,
+  <span class="json-key">"total"</span>: <span class="json-number">5</span>,
+  <span class="json-key">"items"</span>: [
+    {
+      <span class="json-key">"id"</span>: <span class="json-string">"123e4567-e89b-12d3-a456-426614174000"</span>,
+      <span class="json-key">"device_id"</span>: <span class="json-string">"bfa9d28a-4fc6-4dc4-9280-a2aad70feeb3"</span>,
+      <span class="json-key">"device_name"</span>: <span class="json-string">"FLASHNET - ROUTER - HW NE8000 BORDA"</span>,
+      <span class="json-key">"status"</span>: <span class="json-string">"success"</span>,
+      <span class="json-key">"file_size_bytes"</span>: <span class="json-number">1024000</span>,
+      <span class="json-key">"hash_sha256"</span>: <span class="json-string">"abc123def456..."</span>,
+      <span class="json-key">"created_at"</span>: <span class="json-string">"2026-05-14T09:15:00"</span>,
+      <span class="json-key">"download_url"</span>: <span class="json-string">"/api/v1/external/backups/123e4567-e89b-12d3-a456-426614174000/download"</span>
+    }
+  ]
+}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Passo 3 -->
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Faça o Download do Arquivo</h3>
+                        <p>Use o <span class="highlight">ID do backup</span> do Passo 2 para baixar o arquivo binário.</p>
+                        
+                        <div class="endpoint">
+                            <span class="get">GET</span> /api/v1/external/backups/{BACKUP_ID}/download
+                        </div>
+                        
+                        <p style="margin-top: 15px;"><strong>Parâmetros:</strong></p>
+                        <ul style="margin-left: 20px;">
+                            <li><span class="highlight">BACKUP_ID</span> → Copie o ID do backup do Passo 2</li>
+                        </ul>
+                        
+                        <div class="success-box">
+                            <strong>✅ Regra Importante:</strong> Apenas backups com <span class="highlight">status: "success"</span> podem ser baixados. Se o backup está em outro status, nenhuma ação ocorrerá.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Exemplos de Código -->
+            <div style="margin-top: 60px; padding-top: 40px; border-top: 2px solid #e5e7eb;">
+                <h2 style="color: #667eea; margin-bottom: 30px;">💻 Exemplos de Código</h2>
+                
+                <h3 style="color: #333; margin: 30px 0 15px;">Python (usando requests)</h3>
+                <div class="code-block">
+import requests
+
+TOKEN = "bc_seu_token_aqui"
+BASE_URL = "https://backupcenter.ajustconsulting.com.br"
+headers = {"Authorization": f"Bearer {TOKEN}"}
+
+# Passo 1: Listar grupos
+response = requests.get(f"{BASE_URL}/api/v1/external/groups", headers=headers)
+groups = response.json()["groups"]
+group_id = groups[0]["id"]
+
+# Passo 2: Listar backups do grupo
+response = requests.get(
+    f"{BASE_URL}/api/v1/external/groups/{group_id}/backups",
+    params={"status": "success"},
+    headers=headers
+)
+backups = response.json()["items"]
+backup_id = backups[0]["id"]
+
+# Passo 3: Download
+response = requests.get(
+    f"{BASE_URL}/api/v1/external/backups/{backup_id}/download",
+    headers=headers
+)
+with open("backup.bin", "wb") as f:
+    f.write(response.content)
+                </div>
+                
+                <h3 style="color: #333; margin: 30px 0 15px;">cURL (linha de comando)</h3>
+                <div class="code-block">
+# Passo 1
+curl -H "Authorization: Bearer bc_seu_token_aqui" \
+  https://backupcenter.ajustconsulting.com.br/api/v1/external/groups
+
+# Passo 2 (substitua GROUP_ID)
+curl -H "Authorization: Bearer bc_seu_token_aqui" \
+  "https://backupcenter.ajustconsulting.com.br/api/v1/external/groups/GROUP_ID/backups?status=success"
+
+# Passo 3 (substitua BACKUP_ID)
+curl -H "Authorization: Bearer bc_seu_token_aqui" \
+  https://backupcenter.ajustconsulting.com.br/api/v1/external/backups/BACKUP_ID/download \
+  -o backup.bin
+                </div>
+                
+                <h3 style="color: #333; margin: 30px 0 15px;">JavaScript (Fetch API)</h3>
+                <div class="code-block">
+const TOKEN = "bc_seu_token_aqui";
+const BASE_URL = "https://backupcenter.ajustconsulting.com.br";
+
+// Função auxiliar
+async function apiCall(endpoint, options = {}) {
+    const response = await fetch(BASE_URL + endpoint, {
+        ...options,
+        headers: {
+            "Authorization": `Bearer ${TOKEN}`,
+            ...options.headers
+        }
+    });
+    return response.json();
+}
+
+// Passo 1
+const groupsData = await apiCall("/api/v1/external/groups");
+const groupId = groupsData.groups[0].id;
+
+// Passo 2
+const backupsData = await apiCall(
+    `/api/v1/external/groups/${groupId}/backups?status=success`
+);
+const backupId = backupsData.items[0].id;
+
+// Passo 3
+const response = await fetch(
+    `${BASE_URL}/api/v1/external/backups/${backupId}/download`,
+    { headers: { "Authorization": `Bearer ${TOKEN}` } }
+);
+const blob = await response.blob();
+// Salvar arquivo...
+                </div>
+            </div>
+            
+            <div style="margin-top: 50px; padding: 30px; background: #f0f4ff; border-radius: 8px; border-left: 4px solid #667eea;">
+                <h3 style="color: #667eea; margin-bottom: 15px;">📚 Precisa de Mais Informações?</h3>
+                <p>Acesse a <strong>documentação técnica completa</strong> no Swagger (mais detalhes de schemas):</p>
+                <a href="/docs" class="cta-button">Ver Swagger OpenAPI →</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2026 Backup Center - API v1.0</p>
+            <p>Suporte: <strong>Ajust Consulting</strong></p>
+        </div>
+    </div>
+</body>
+</html>

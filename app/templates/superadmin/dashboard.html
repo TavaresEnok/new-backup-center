@@ -1,0 +1,838 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Admin Dashboard | Backup Center{% endblock %}
+
+{% block content %}
+
+{% set backup_goal = 90 %}
+{% set collection_goal = 95 %}
+{% set backup_goal_gap = (stats.backups_success_rate - backup_goal)|round(1) %}
+{% set collection_goal_gap = (stats.invoices_collection_rate - collection_goal)|round(1) %}
+{% set payments_attention = stats.tenants_payment_pending + stats.tenants_payment_canceled %}
+{% set payment_ready_label = 'Pronto' if payment_setup.ready else 'Incompleto' %}
+
+<div class="command-shell space-y-6 pb-6">
+    <section class="hero-card p-6 lg:p-7">
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_.95fr]">
+            <div class="space-y-5">
+                <div class="space-y-3">
+                    <div class="status-strip">
+                        <span class="status-chip">Backoffice SaaS</span>
+                        <span class="status-chip">Janela: {{ range_label }}</span>
+                        <span class="status-chip">Mercado Pago: {{ payment_ready_label }}</span>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-extrabold tracking-tight text-[var(--text-main)] lg:text-[2.35rem]">Dashboard administrativo da plataforma</h1>
+                        <p class="hero-copy mt-2 max-w-3xl">Esta tela precisa responder tres perguntas sem ambiguidade: onde a receita esta em risco, quais clientes exigem acao agora e se a operacao tecnica esta saudavel.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div class="hero-metric">
+                        <p class="hero-metric-label">MRR estimado</p>
+                        <p class="hero-metric-value">{{ stats.mrr }}</p>
+                        <p class="muted-copy mt-2">{{ stats.tenants_payment_active }} clientes com pagamento ativo.</p>
+                    </div>
+                    <div class="hero-metric">
+                        <p class="hero-metric-label">Taxa de backup</p>
+                        <p class="hero-metric-value">{{ stats.backups_success_rate }}%</p>
+                        <div class="mt-3 progress-track"><div class="progress-bar progress-bar-success" style="width: {{ [stats.backups_success_rate, 100]|min }}%"></div></div>
+                        <p class="muted-copy mt-2">Meta: {{ backup_goal }}% • {{ '+' if backup_goal_gap >= 0 else '' }}{{ backup_goal_gap }}pp</p>
+                    </div>
+                    <div class="hero-metric">
+                        <p class="hero-metric-label">Taxa de cobranca</p>
+                        <p class="hero-metric-value">{{ stats.invoices_collection_rate }}%</p>
+                        <div class="mt-3 progress-track"><div class="progress-bar {% if stats.invoices_collection_rate >= collection_goal %}progress-bar-success{% elif stats.invoices_collection_rate >= 75 %}progress-bar-warning{% else %}progress-bar-danger{% endif %}" style="width: {{ [stats.invoices_collection_rate, 100]|min }}%"></div></div>
+                        <p class="muted-copy mt-2">Meta: {{ collection_goal }}% • {{ '+' if collection_goal_gap >= 0 else '' }}{{ collection_goal_gap }}pp</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2.5">
+                    {% for key, label in range_options.items() %}
+                    <a href="{{ url_for('superadmin_dashboard.dashboard', range=key) }}"
+                        class="anchor-chip {% if selected_range == key %}anchor-chip-active{% endif %}">
+                        {{ label }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="surface-card muted-card p-4 lg:p-5">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">O que exige acao agora</p>
+                        <p class="list-copy mt-1">Fila curta, orientada por impacto financeiro e operacional.</p>
+                    </div>
+                    <a href="{{ links.manage_tenants }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Abrir clientes</a>
+                </div>
+                <div class="queue-list">
+                    <a href="{{ links.risk_clients }}" class="queue-item drill-trigger" data-drill-type="ops" data-drill-value="risk" data-drill-label="Clientes em risco comercial" data-drill-key="ops:risk">
+                        <span class="queue-dot queue-dot-critical"></span>
+                        <div class="min-w-0">
+                            <p class="queue-title">Clientes em risco comercial</p>
+                            <p class="queue-value text-rose-300">{{ stats.risk_tenants_count }}</p>
+                            <p class="muted-copy mt-2">Past due, cancelados, falhas de cobranca ou operacao degradada.</p>
+                            <span class="queue-link">Investigar agora</span>
+                        </div>
+                    </a>
+                    <a href="{{ links.revenue_risk }}" class="queue-item drill-trigger" data-drill-type="invoice" data-drill-value="pending_or_failed" data-drill-label="Receita em risco" data-drill-key="invoice:pending_or_failed">
+                        <span class="queue-dot queue-dot-critical"></span>
+                        <div class="min-w-0">
+                            <p class="queue-title">Receita em risco</p>
+                            <p class="queue-value text-rose-300">{{ stats.revenue_at_risk }}</p>
+                            <p class="muted-copy mt-2">Pendentes: {{ stats.pending_amount }} • Falhas: {{ stats.failed_amount }}</p>
+                        </div>
+                    </a>
+                    <a href="{{ links.period_failures }}" class="queue-item drill-trigger" data-drill-type="ops" data-drill-value="period_failures" data-drill-label="Falhas no periodo" data-drill-key="ops:period_failures">
+                        <span class="queue-dot {% if stats.backups_failed + stats.invoices_period_failed > 0 %}queue-dot-warning{% else %}queue-dot-good{% endif %}"></span>
+                        <div class="min-w-0">
+                            <p class="queue-title">Falhas no periodo</p>
+                            <p class="queue-value {% if stats.backups_failed + stats.invoices_period_failed > 0 %}text-amber-300{% else %}text-emerald-300{% endif %}">{{ stats.backups_failed + stats.invoices_period_failed }}</p>
+                            <p class="muted-copy mt-2">Backup: {{ stats.backups_failed }} • Faturas: {{ stats.invoices_period_failed }}</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="overview" class="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div class="xl:col-span-8 space-y-4">
+            <div class="admin-summary-strip admin-summary-strip--full grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div class="metric-card drill-trigger" data-drill-type="payment" data-drill-value="active" data-drill-label="Clientes com pagamento ativo" data-drill-key="payment:active">
+                    <p class="metric-label">Clientes ativos</p>
+                    <p class="metric-value">{{ stats.tenants_active }} / {{ stats.tenants_total }}</p>
+                    <p class="metric-copy">Inativos: {{ stats.tenants_inactive }} • Novos em 30d: {{ stats.new_tenants_30d }}</p>
+                </div>
+                <div class="metric-card">
+                    <p class="metric-label">Dispositivos cadastrados</p>
+                    <p class="metric-value">{{ stats.devices_total }}</p>
+                    <p class="metric-copy">Ativos: {{ stats.devices_active }} • Media por cliente: {{ stats.avg_devices_per_tenant }}</p>
+                </div>
+                <div class="metric-card">
+                    <p class="metric-label">Usuarios da plataforma</p>
+                    <p class="metric-value">{{ stats.users_total }}</p>
+                    <p class="metric-copy">Superadmins: {{ stats.admin_users_total }} • Usuarios em clientes: {{ stats.tenant_users_total }}</p>
+                </div>
+                <div class="metric-card drill-trigger" data-drill-type="subscription" data-drill-value="trial" data-drill-label="Clientes em trial" data-drill-key="subscription:trial">
+                    <p class="metric-label">Trials vencendo</p>
+                    <p class="metric-value">{{ stats.trial_expiring_7d }}</p>
+                    <p class="metric-copy">Trials atuais: {{ stats.subscriptions_trial }} • Sem plano: {{ stats.tenants_without_plan }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div class="stack-card">
+                    <div class="list-header">
+                        <div>
+                            <p class="section-title">Saude comercial</p>
+                            <p class="list-copy mt-1">Indicadores que impactam conversao, cobranca e inadimplencia.</p>
+                        </div>
+                        <a href="{{ links.manage_billing }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Operar cobranca</a>
+                    </div>
+                    <div class="mini-list">
+                        <a href="{{ links.mrr_active }}" class="mini-row drill-trigger" data-drill-type="payment" data-drill-value="active" data-drill-label="Clientes com pagamento ativo" data-drill-key="payment:active">
+                            <div class="mini-row-copy">
+                                <p class="mini-row-title">Base pagante ativa</p>
+                                <p class="feed-item-meta">Clientes ativos em assinatura recorrente ou status adimplente.</p>
+                            </div>
+                            <span class="mini-row-value text-emerald-300">{{ stats.tenants_payment_active }}</span>
+                        </a>
+                        <a href="{{ links.revenue_risk }}" class="mini-row drill-trigger" data-drill-type="invoice" data-drill-value="pending_or_failed" data-drill-label="Receita em risco" data-drill-key="invoice:pending_or_failed">
+                            <div class="mini-row-copy">
+                                <p class="mini-row-title">Pagamentos com atencao</p>
+                                <p class="feed-item-meta">Pendentes + cancelados: {{ payments_attention }} cliente(s).</p>
+                            </div>
+                            <span class="mini-row-value text-amber-300">{{ stats.tenants_payment_pending }} pend.</span>
+                        </a>
+                        <a href="{{ links.revenue_risk }}" class="mini-row drill-trigger" data-drill-type="invoice" data-drill-value="failed" data-drill-label="Faturas com falha" data-drill-key="invoice:failed">
+                            <div class="mini-row-copy">
+                                <p class="mini-row-title">Falhas de cobranca</p>
+                                <p class="feed-item-meta">Falhas abertas exigem acao imediata do financeiro/comercial.</p>
+                            </div>
+                            <span class="mini-row-value text-rose-300">{{ stats.invoices_failed }}</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="stack-card">
+                    <div class="list-header">
+                        <div>
+                            <p class="section-title">Anomalias de cadastro</p>
+                            <p class="list-copy mt-1">Erros estruturais que desorganizam suporte, cobranca e onboarding.</p>
+                        </div>
+                        <a href="{{ links.manage_tenants }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Corrigir base</a>
+                    </div>
+                    <div class="mini-list">
+                        <a href="{{ links.without_plan }}" class="mini-row drill-trigger" data-drill-type="ops" data-drill-value="no_plan" data-drill-label="Clientes sem plano" data-drill-key="ops:no_plan">
+                            <div class="mini-row-copy">
+                                <p class="mini-row-title">Clientes sem plano</p>
+                                <p class="feed-item-meta">Cliente ativo sem enquadramento comercial ou limite claro.</p>
+                            </div>
+                            <span class="mini-row-value">{{ stats.tenants_without_plan }}</span>
+                        </a>
+                        <a href="{{ links.without_devices }}" class="mini-row drill-trigger" data-drill-type="ops" data-drill-value="no_devices" data-drill-label="Clientes sem dispositivos" data-drill-key="ops:no_devices">
+                            <div class="mini-row-copy">
+                                <p class="mini-row-title">Clientes sem dispositivos</p>
+                                <p class="feed-item-meta">Onboarding incompleto ou cliente parado apos contratacao.</p>
+                            </div>
+                            <span class="mini-row-value">{{ stats.tenants_without_devices }}</span>
+                        </a>
+                        <a href="{{ links.without_admin }}" class="mini-row drill-trigger" data-drill-type="ops" data-drill-value="no_admin" data-drill-label="Clientes sem admin" data-drill-key="ops:no_admin">
+                            <div class="mini-row-copy">
+                                <p class="mini-row-title">Clientes sem admin</p>
+                                <p class="feed-item-meta">Cliente sem owner/admin dificulta operacao e suporte.</p>
+                            </div>
+                            <span class="mini-row-value">{{ stats.tenants_without_admin }}</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="xl:col-span-4 space-y-4">
+            <div class="stack-card muted-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Alertas acionaveis</p>
+                        <p class="list-copy mt-1">Lista curta, sem competir com o restante da tela.</p>
+                    </div>
+                    <span class="pill-chip">{{ alerts|length }}</span>
+                </div>
+                <div class="alerts-feed">
+                    {% for alert in alerts[:4] %}
+                    <div class="feed-item">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="feed-item-title">{{ alert.title }}</p>
+                                <p class="feed-item-meta">{{ alert.description }}</p>
+                            </div>
+                            <span class="status-badge {% if alert.severity == 'critical' %}status-badge-danger{% else %}status-badge-warning{% endif %}">{{ 'Critico' if alert.severity == 'critical' else 'Atencao' }}</span>
+                        </div>
+                        <a href="{{ alert.action_url }}" class="queue-link">{{ alert.action_label }}</a>
+                    </div>
+                    {% else %}
+                    <div class="feed-item">
+                        <p class="feed-item-title text-emerald-300">Sem alertas criticos no momento</p>
+                        <p class="feed-item-meta">A plataforma esta operando dentro do esperado nesta janela.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="stack-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Navegacao rapida</p>
+                        <p class="list-copy mt-1">Acesso direto para as telas operacionais principais.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <a href="#overview" class="anchor-chip">Visao geral</a>
+                    <a href="#revenue" class="anchor-chip">Receita</a>
+                    <a href="#operations" class="anchor-chip">Operacao</a>
+                    <a href="#drilldownPanel" class="anchor-chip">Drill-down</a>
+                    <a href="{{ links.manage_tenants }}" class="anchor-chip">Clientes</a>
+                    <a href="{{ links.manage_users }}" class="anchor-chip">Usuarios</a>
+                    <a href="{{ links.manage_billing }}" class="anchor-chip">Cobranca</a>
+                    <a href="{{ links.manage_types }}" class="anchor-chip">Catalogo tecnico</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="revenue" class="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div class="xl:col-span-7 space-y-4">
+            <div class="chart-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Tendencia de faturamento</p>
+                        <p class="list-copy mt-1">Evolucao das faturas na janela selecionada, com clique para drill-down.</p>
+                    </div>
+                    <a href="{{ url_for('superadmin_billing.list_billing') }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Abrir cobranca</a>
+                </div>
+                <div class="chart-wrap"><canvas id="chartInvoices"></canvas></div>
+            </div>
+
+            <div class="list-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Clientes em risco</p>
+                        <p class="list-copy mt-1">Top clientes para acao comercial ou financeira agora.</p>
+                    </div>
+                    <span class="pill-chip">{{ risk_tenants|length }} clientes</span>
+                </div>
+                <div class="table-shell">
+                    <table class="admin-table min-w-full">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Status</th>
+                                <th>Faturas</th>
+                                <th>Backups</th>
+                                <th class="text-right">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in risk_tenants %}
+                            <tr>
+                                <td>
+                                    <p class="font-semibold text-[var(--text-main)]">{{ row.name }}</p>
+                                    <p class="feed-item-meta">{{ row.slug }}</p>
+                                </td>
+                                <td>
+                                    {% if row.subscription_status == 'active' %}
+                                    <span class="status-badge status-badge-success">Ativo</span>
+                                    {% elif row.subscription_status in ['past_due', 'trial'] %}
+                                    <span class="status-badge status-badge-warning">{{ row.subscription_status|replace('_', ' ')|title }}</span>
+                                    {% else %}
+                                    <span class="status-badge status-badge-danger">{{ row.subscription_status|replace('_', ' ')|title }}</span>
+                                    {% endif %}
+                                    <p class="feed-item-meta mt-2">Score {{ row.risk_score }}</p>
+                                </td>
+                                <td>
+                                    <span class="text-amber-300">Pen {{ row.invoice_pending }}</span>
+                                    <span class="mx-1 text-[var(--text-muted)]">/</span>
+                                    <span class="text-rose-300">Falha {{ row.invoice_failed }}</span>
+                                </td>
+                                <td>
+                                    <span class="text-emerald-300">S {{ row.backup_success_period }}</span>
+                                    <span class="mx-1 text-[var(--text-muted)]">/</span>
+                                    <span class="text-rose-300">F {{ row.backup_failed_period }}</span>
+                                </td>
+                                <td class="text-right">
+                                    <a href="{{ url_for('superadmin_tenants.view_tenant', tenant_id=row.id) }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">360</a>
+                                    <a href="{{ url_for('superadmin_billing.list_billing', q=row.name) }}" class="ml-2 text-xs font-semibold text-blue-500 hover:text-blue-400">Cobranca</a>
+                                    <a href="{{ url_for('superadmin_users.list_users', scope='tenant', tenant=row.id) }}" class="ml-2 text-xs font-semibold text-blue-500 hover:text-blue-400">Usuarios</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-[var(--text-muted)]">Nenhum cliente em risco no momento.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="xl:col-span-5 space-y-4">
+            <div class="chart-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Saude de pagamento</p>
+                        <p class="list-copy mt-1">Distribuicao atual da base por status de assinatura.</p>
+                    </div>
+                    <span class="pill-chip">{{ stats.tenants_total }} clientes</span>
+                </div>
+                <div class="chart-wrap"><canvas id="chartPayment"></canvas></div>
+                <div class="status-strip mt-4">
+                    <span class="status-chip">Ativos: {{ stats.tenants_payment_active }}</span>
+                    <span class="status-chip">Pendentes: {{ stats.tenants_payment_pending }}</span>
+                    <span class="status-chip">Cancelados: {{ stats.tenants_payment_canceled }}</span>
+                </div>
+            </div>
+
+            <div class="stack-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Mix de planos</p>
+                        <p class="list-copy mt-1">Distribuicao atual da base por produto comercial.</p>
+                    </div>
+                    <a href="{{ url_for('superadmin_plans.list_plans') }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Gerenciar planos</a>
+                </div>
+                <div class="mini-list">
+                    {% for plan in plan_usage[:6] %}
+                    <div class="mini-row">
+                        <div class="mini-row-copy">
+                            <p class="mini-row-title">{{ plan.name }}</p>
+                            <div class="progress-track mt-2"><div class="progress-bar" style="width: {{ (plan.tenants / [stats.tenants_total, 1]|max * 100)|round(1) }}%"></div></div>
+                        </div>
+                        <span class="mini-row-value">{{ plan.tenants }}</span>
+                    </div>
+                    {% else %}
+                    <div class="feed-item">
+                        <p class="feed-item-title">Sem planos cadastrados</p>
+                        <p class="feed-item-meta">Cadastre produtos para organizar cobranca e limites.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="operations" class="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div class="xl:col-span-7 space-y-4">
+            <div class="chart-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Tendencia de backups</p>
+                        <p class="list-copy mt-1">Visao tecnica do periodo, com clique em sucesso/falha para filtrar clientes.</p>
+                    </div>
+                    <span class="chart-legend-note">{{ range_label }}</span>
+                </div>
+                <div class="chart-wrap"><canvas id="chartBackups"></canvas></div>
+            </div>
+
+            <div class="list-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Top atividade por cliente</p>
+                        <p class="list-copy mt-1">Onde o uso da plataforma esta concentrado nesta janela.</p>
+                    </div>
+                    <a href="{{ url_for('superadmin_tenants.list_tenants') }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Ver todos</a>
+                </div>
+                <div class="table-shell">
+                    <table class="admin-table min-w-full">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Uso</th>
+                                <th>Backups</th>
+                                <th class="text-right">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in top_activity_tenants %}
+                            <tr>
+                                <td>
+                                    <p class="font-semibold text-[var(--text-main)]">{{ row.name }}</p>
+                                    <p class="feed-item-meta">{{ row.plan_name }}</p>
+                                </td>
+                                <td>{{ row.devices_count }} disp. • {{ row.users_count }} usuarios</td>
+                                <td>
+                                    <span class="text-emerald-300">S {{ row.backup_success_period }}</span>
+                                    <span class="mx-1 text-[var(--text-muted)]">/</span>
+                                    <span class="text-rose-300">F {{ row.backup_failed_period }}</span>
+                                </td>
+                                <td class="text-right">
+                                    <a href="{{ url_for('superadmin_tenants.view_tenant', tenant_id=row.id) }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">360</a>
+                                    <a href="{{ url_for('superadmin_tenants.edit_tenant', tenant_id=row.id) }}" class="ml-2 text-xs font-semibold text-blue-500 hover:text-blue-400">Editar</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-[var(--text-muted)]">Sem dados de atividade.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="xl:col-span-5 space-y-4">
+            <div class="stack-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Clientes recentes</p>
+                        <p class="list-copy mt-1">Novos clientes criados recentemente.</p>
+                    </div>
+                    <a href="{{ links.growth_clients }}" class="text-xs font-semibold text-blue-500 hover:text-blue-400">Ver clientes</a>
+                </div>
+                <div class="tenants-feed">
+                    {% for row in recent_tenants[:6] %}
+                    <a href="{{ url_for('superadmin_tenants.view_tenant', tenant_id=row.id) }}" class="feed-item feed-item-link">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="feed-item-title">{{ row.name }}</p>
+                                <p class="feed-item-meta">{{ row.slug }} • {{ format_datetime(row.created_at, "%d/%m/%Y", "-") }}</p>
+                            </div>
+                            {% if row.subscription_status == 'active' %}
+                            <span class="status-badge status-badge-success">Ativo</span>
+                            {% elif row.subscription_status in ['past_due', 'trial'] %}
+                            <span class="status-badge status-badge-warning">{{ row.subscription_status|replace('_', ' ')|title }}</span>
+                            {% else %}
+                            <span class="status-badge status-badge-danger">{{ row.subscription_status|replace('_', ' ')|title }}</span>
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% else %}
+                    <div class="feed-item">
+                        <p class="feed-item-title">Sem novos clientes recentes</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="stack-card">
+                <div class="list-header">
+                    <div>
+                        <p class="section-title">Atividade recente da plataforma</p>
+                        <p class="list-copy mt-1">Ultimas 20 acoes relevantes para suporte e operacao.</p>
+                    </div>
+                </div>
+                <div class="activity-feed">
+                    {% for item in recent_activities[:8] %}
+                    <div class="feed-item">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="feed-item-title">{{ item.action }}</p>
+                                <p class="feed-item-meta">{{ item.user_name }} • {{ item.tenant_name }}</p>
+                                {% if item.details %}
+                                <p class="feed-item-meta mt-2">{{ item.details[:120] }}{% if item.details|length > 120 %}...{% endif %}</p>
+                                {% endif %}
+                            </div>
+                            <span class="pill-chip">{{ format_datetime(item.created_at, "%d/%m %H:%M", "-") }}</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="feed-item">
+                        <p class="feed-item-title">Sem eventos recentes</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="drilldownPanel" class="drill-shell space-y-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <p class="section-title">Drill-down de clientes</p>
+                <p class="list-copy mt-1">Use os cards e graficos acima como navegacao analitica. O objetivo aqui e cortar a base ate chegar no grupo exato de clientes.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="drillFilterBadge" class="drill-filter-badge">Sem filtro ativo</span>
+                <button id="clearDrillFilter" type="button" class="hidden rounded-lg border border-[var(--line-color)] px-3 py-2 text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Limpar
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <input id="drillSearch" type="text" placeholder="Buscar cliente por nome, slug ou email..." class="w-full rounded-xl border border-[var(--line-color)] bg-transparent px-3.5 py-3 text-sm text-[var(--text-main)] outline-none ring-blue-500 focus:ring-1">
+            <p id="drillVisibleCount" class="text-sm text-[var(--text-muted)]">0 clientes exibidos</p>
+        </div>
+
+        <div class="table-shell">
+            <table id="drilldownTable" class="admin-table min-w-full">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Status pagto</th>
+                        <th>Plano</th>
+                        <th>Uso</th>
+                        <th>Backups ({{ range_label }})</th>
+                        <th>Faturas</th>
+                        <th>Risco</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in tenant_rows %}
+                    <tr data-drill-row="1"
+                        data-subscription="{{ row.subscription_status|lower }}"
+                        data-has-plan="{% if row.plan_name == 'Sem plano' %}0{% else %}1{% endif %}"
+                        data-devices="{{ row.devices_count }}"
+                        data-users="{{ row.users_count }}"
+                        data-admin-users="{{ row.admin_users_count }}"
+                        data-backup-success="{{ row.backup_success_period }}"
+                        data-backup-failed="{{ row.backup_failed_period }}"
+                        data-invoice-paid="{{ row.invoice_paid }}"
+                        data-invoice-pending="{{ row.invoice_pending }}"
+                        data-invoice-failed="{{ row.invoice_failed }}"
+                        data-risk-score="{{ row.risk_score }}">
+                        <td>
+                            <p class="font-semibold text-[var(--text-main)]">{{ row.name }}</p>
+                            <p class="feed-item-meta">{{ row.slug }} • {{ row.email }}</p>
+                        </td>
+                        <td>
+                            {% if row.subscription_status == 'active' %}
+                            <span class="status-badge status-badge-success">Ativo</span>
+                            {% elif row.subscription_status in ['past_due', 'trial'] %}
+                            <span class="status-badge status-badge-warning">{{ row.subscription_status|replace('_', ' ')|title }}</span>
+                            {% else %}
+                            <span class="status-badge status-badge-danger">{{ row.subscription_status|replace('_', ' ')|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ row.plan_name }}</td>
+                        <td>{{ row.devices_count }} disp • {{ row.users_count }} users</td>
+                        <td><span class="text-emerald-300">S {{ row.backup_success_period }}</span> / <span class="text-rose-300">F {{ row.backup_failed_period }}</span></td>
+                        <td><span class="text-emerald-300">P {{ row.invoice_paid }}</span> / <span class="text-amber-300">Pen {{ row.invoice_pending }}</span> / <span class="text-rose-300">F {{ row.invoice_failed }}</span></td>
+                        <td>
+                            {% if row.risk_score > 0 %}
+                            <span class="font-semibold text-rose-300">{{ row.risk_score }}</span>
+                            {% else %}
+                            <span class="text-[var(--text-muted)]">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-[var(--text-muted)]">Sem clientes para exibir.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<script>
+    (() => {
+        const labels = {{ charts.labels|tojson }};
+        const backupSuccess = {{ charts.backup_success|tojson }};
+        const backupFailed = {{ charts.backup_failed|tojson }};
+        const invoicePaid = {{ charts.invoice_paid|tojson }};
+        const invoicePending = {{ charts.invoice_pending|tojson }};
+        const invoiceFailed = {{ charts.invoice_failed|tojson }};
+        const payment = {{ charts.payment_distribution|tojson }};
+
+        const baseGridColor = 'rgba(148, 163, 184, 0.18)';
+        const baseTickColor = 'rgba(148, 163, 184, 0.95)';
+        const drillState = { type: null, value: null, label: '' };
+
+        const drillPanel = document.getElementById('drilldownPanel');
+        const drillRows = Array.from(document.querySelectorAll('#drilldownTable tbody tr[data-drill-row="1"]'));
+        const drillSearchInput = document.getElementById('drillSearch');
+        const drillFilterBadge = document.getElementById('drillFilterBadge');
+        const drillVisibleCount = document.getElementById('drillVisibleCount');
+        const clearDrillFilterBtn = document.getElementById('clearDrillFilter');
+        const drillTriggers = Array.from(document.querySelectorAll('.drill-trigger[data-drill-type][data-drill-value]'));
+
+        const toNumber = (value) => Number.parseInt(String(value || '0'), 10) || 0;
+
+        const updateDrillTriggerUI = () => {
+            const activeKey = drillState.type && drillState.value ? `${drillState.type}:${drillState.value}` : '';
+            drillTriggers.forEach((el) => {
+                el.classList.toggle('drill-trigger-active', activeKey && el.dataset.drillKey === activeKey);
+            });
+        };
+
+        const rowMatchesFilter = (row) => {
+            if (!drillState.type || !drillState.value) return true;
+
+            const subscription = String(row.dataset.subscription || '').toLowerCase();
+            const hasPlan = String(row.dataset.hasPlan || '0') === '1';
+            const devices = toNumber(row.dataset.devices);
+            const adminUsers = toNumber(row.dataset.adminUsers);
+            const backupSuccessCount = toNumber(row.dataset.backupSuccess);
+            const backupFailedCount = toNumber(row.dataset.backupFailed);
+            const invoicePaidCount = toNumber(row.dataset.invoicePaid);
+            const invoicePendingCount = toNumber(row.dataset.invoicePending);
+            const invoiceFailedCount = toNumber(row.dataset.invoiceFailed);
+            const riskScore = toNumber(row.dataset.riskScore);
+
+            if (drillState.type === 'subscription') {
+                return subscription === drillState.value;
+            }
+
+            if (drillState.type === 'payment') {
+                if (drillState.value === 'active') return subscription === 'active';
+                if (drillState.value === 'pending') return subscription === 'trial' || subscription === 'past_due';
+                if (drillState.value === 'canceled') return subscription === 'canceled';
+                return true;
+            }
+
+            if (drillState.type === 'invoice') {
+                if (drillState.value === 'paid') return invoicePaidCount > 0;
+                if (drillState.value === 'pending') return invoicePendingCount > 0;
+                if (drillState.value === 'failed') return invoiceFailedCount > 0;
+                if (drillState.value === 'pending_or_failed') return invoicePendingCount > 0 || invoiceFailedCount > 0;
+                return true;
+            }
+
+            if (drillState.type === 'backup') {
+                if (drillState.value === 'success') return backupSuccessCount > 0;
+                if (drillState.value === 'failed') return backupFailedCount > 0;
+                if (drillState.value === 'none') return (backupSuccessCount + backupFailedCount) === 0;
+                return true;
+            }
+
+            if (drillState.type === 'ops') {
+                if (drillState.value === 'risk') return riskScore > 0;
+                if (drillState.value === 'no_plan') return !hasPlan;
+                if (drillState.value === 'no_devices') return devices === 0;
+                if (drillState.value === 'no_admin') return adminUsers === 0;
+                if (drillState.value === 'period_failures') return backupFailedCount > 0 || invoiceFailedCount > 0;
+                return true;
+            }
+
+            return true;
+        };
+
+        const rowMatchesSearch = (row) => {
+            const term = String(drillSearchInput?.value || '').trim().toLowerCase();
+            if (!term) return true;
+            return String(row.textContent || '').toLowerCase().includes(term);
+        };
+
+        const applyDrillFilter = () => {
+            let visible = 0;
+            drillRows.forEach((row) => {
+                const show = rowMatchesFilter(row) && rowMatchesSearch(row);
+                row.style.display = show ? '' : 'none';
+                if (show) visible += 1;
+            });
+            if (drillVisibleCount) {
+                drillVisibleCount.textContent = `${visible} cliente(s) exibido(s)`;
+            }
+            updateDrillTriggerUI();
+        };
+
+        const setDrillFilter = (type, value, label) => {
+            drillState.type = type || null;
+            drillState.value = value || null;
+            drillState.label = label || 'Sem filtro ativo';
+
+            if (drillFilterBadge) {
+                drillFilterBadge.textContent = drillState.type ? `Filtro: ${drillState.label}` : 'Sem filtro ativo';
+            }
+            if (clearDrillFilterBtn) {
+                clearDrillFilterBtn.classList.toggle('hidden', !drillState.type);
+            }
+
+            applyDrillFilter();
+
+            if (drillPanel) {
+                drillPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        drillTriggers.forEach((el) => {
+            el.addEventListener('click', (event) => {
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1) {
+                    return;
+                }
+                event.preventDefault();
+                setDrillFilter(el.dataset.drillType, el.dataset.drillValue, el.dataset.drillLabel || 'Filtro manual');
+            });
+        });
+
+        if (drillSearchInput) {
+            drillSearchInput.addEventListener('input', applyDrillFilter);
+        }
+
+        if (clearDrillFilterBtn) {
+            clearDrillFilterBtn.addEventListener('click', () => {
+                drillState.type = null;
+                drillState.value = null;
+                drillState.label = '';
+                if (drillFilterBadge) {
+                    drillFilterBadge.textContent = 'Sem filtro ativo';
+                }
+                clearDrillFilterBtn.classList.add('hidden');
+                applyDrillFilter();
+            });
+        }
+
+        const backupsCtx = document.getElementById('chartBackups');
+        if (backupsCtx) {
+            new Chart(backupsCtx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Sucesso',
+                            data: backupSuccess,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                            tension: 0.32,
+                            fill: true,
+                            pointRadius: 2,
+                        },
+                        {
+                            label: 'Falha',
+                            data: backupFailed,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.10)',
+                            tension: 0.32,
+                            fill: true,
+                            pointRadius: 2,
+                        },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: baseTickColor } } },
+                    onClick: (event, elements) => {
+                        if (!elements.length) return;
+                        const datasetIdx = elements[0].datasetIndex;
+                        if (datasetIdx === 0) {
+                            setDrillFilter('backup', 'success', 'Backup com sucesso');
+                        } else if (datasetIdx === 1) {
+                            setDrillFilter('backup', 'failed', 'Backup com falha');
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: baseGridColor }, ticks: { color: baseTickColor } },
+                        y: { beginAtZero: true, grid: { color: baseGridColor }, ticks: { color: baseTickColor } },
+                    }
+                }
+            });
+        }
+
+        const invoicesCtx = document.getElementById('chartInvoices');
+        if (invoicesCtx) {
+            new Chart(invoicesCtx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Pagas', data: invoicePaid, backgroundColor: 'rgba(16, 185, 129, 0.75)' },
+                        { label: 'Pendentes', data: invoicePending, backgroundColor: 'rgba(245, 158, 11, 0.75)' },
+                        { label: 'Falhas', data: invoiceFailed, backgroundColor: 'rgba(239, 68, 68, 0.75)' },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: baseTickColor } } },
+                    onClick: (event, elements) => {
+                        if (!elements.length) return;
+                        const datasetIdx = elements[0].datasetIndex;
+                        if (datasetIdx === 0) {
+                            setDrillFilter('invoice', 'paid', 'Faturas pagas');
+                        } else if (datasetIdx === 1) {
+                            setDrillFilter('invoice', 'pending', 'Faturas pendentes');
+                        } else if (datasetIdx === 2) {
+                            setDrillFilter('invoice', 'failed', 'Faturas com falha');
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { color: baseGridColor }, ticks: { color: baseTickColor } },
+                        y: { stacked: true, beginAtZero: true, grid: { color: baseGridColor }, ticks: { color: baseTickColor } },
+                    }
+                }
+            });
+        }
+
+        const paymentCtx = document.getElementById('chartPayment');
+        if (paymentCtx) {
+            new Chart(paymentCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Ativos', 'Pendentes', 'Cancelados'],
+                    datasets: [{
+                        data: [payment.active, payment.pending, payment.canceled],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderColor: ['#10b981', '#f59e0b', '#ef4444'],
+                        borderWidth: 1,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: baseTickColor } } },
+                    onClick: (event, elements) => {
+                        if (!elements.length) return;
+                        const itemIndex = elements[0].index;
+                        if (itemIndex === 0) {
+                            setDrillFilter('payment', 'active', 'Pagamento ativo');
+                        } else if (itemIndex === 1) {
+                            setDrillFilter('payment', 'pending', 'Pagamento pendente');
+                        } else if (itemIndex === 2) {
+                            setDrillFilter('payment', 'canceled', 'Pagamento cancelado');
+                        }
+                    }
+                }
+            });
+        }
+
+        applyDrillFilter();
+    })();
+</script>
+{% endblock %}

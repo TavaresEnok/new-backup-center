@@ -1,0 +1,124 @@
+<aside
+    class="fixed left-0 top-0 z-50 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-[var(--line-color)] bg-[var(--bg-app)] transition-transform duration-300 ease-linear lg:static lg:translate-x-0"
+    :class="mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+    @keydown.escape.window="mobileSidebarOpen = false">
+
+    <div class="flex items-center justify-between gap-2 px-6 py-5.5 lg:py-6.5">
+        <a href="{{ url_for('superadmin_dashboard.dashboard') }}" class="flex items-center gap-2">
+            <div class="rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-2 shadow-lg">
+                <svg class="h-6 w-6 fill-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="text-base font-bold text-[var(--text-main)]">Backup Center</p>
+                <p class="text-xs font-medium text-[var(--text-muted)]">Painel Super Admin</p>
+            </div>
+        </a>
+
+        <button class="block lg:hidden" @click="mobileSidebarOpen = false">
+            <i data-lucide="x" class="h-6 w-6 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"></i>
+        </button>
+    </div>
+
+    <div class="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
+        <nav class="mt-2 px-4 py-4 lg:mt-4 lg:px-6"
+            @click="if (window.innerWidth < 1024 && $event.target.closest('a')) { mobileSidebarOpen = false; }">
+            {% set current_endpoint = request.endpoint|default('') %}
+
+            <div class="space-y-6">
+                <div>
+                    <h3 class="mb-3 ml-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Visao</h3>
+                    <ul class="flex flex-col gap-1.5">
+                        <li>
+                            <a href="{{ url_for('superadmin_dashboard.dashboard') }}"
+                                class="menu-item group {% if current_endpoint == 'superadmin_dashboard.dashboard' %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="layout-dashboard"
+                                    class="h-5 w-5 shrink-0 {% if current_endpoint == 'superadmin_dashboard.dashboard' %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Dashboard</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('superadmin_dashboard.search') }}"
+                                class="menu-item group {% if current_endpoint == 'superadmin_dashboard.search' %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="search"
+                                    class="h-5 w-5 shrink-0 {% if current_endpoint == 'superadmin_dashboard.search' %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Busca global</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="mb-3 ml-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Clientes e receita</h3>
+                    <ul class="flex flex-col gap-1.5">
+                        <li>
+                            <a href="{{ url_for('superadmin_tenants.list_tenants') }}"
+                                class="menu-item group {% if 'superadmin_tenants' in current_endpoint %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="building-2"
+                                    class="h-5 w-5 shrink-0 {% if 'superadmin_tenants' in current_endpoint %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Clientes</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('superadmin_billing.list_billing') }}"
+                                class="menu-item group {% if 'superadmin_billing' in current_endpoint %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="receipt-text"
+                                    class="h-5 w-5 shrink-0 {% if 'superadmin_billing' in current_endpoint %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Cobranca</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('superadmin_plans.list_plans') }}"
+                                class="menu-item group {% if 'superadmin_plans' in current_endpoint %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="credit-card"
+                                    class="h-5 w-5 shrink-0 {% if 'superadmin_plans' in current_endpoint %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Planos</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="mb-3 ml-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Acesso</h3>
+                    <ul class="flex flex-col gap-1.5">
+                        <li>
+                            <a href="{{ url_for('superadmin_users.list_users') }}"
+                                class="menu-item group {% if 'superadmin_users' in current_endpoint %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="users"
+                                    class="h-5 w-5 shrink-0 {% if 'superadmin_users' in current_endpoint %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Usuarios</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="mb-3 ml-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Catalogo</h3>
+                    <ul class="flex flex-col gap-1.5">
+                        <li>
+                            <a href="{{ url_for('superadmin_device_types.list_types') }}"
+                                class="menu-item group {% if 'superadmin_device_types' in current_endpoint %}menu-item-active{% else %}menu-item-inactive{% endif %}">
+                                <i data-lucide="cpu"
+                                    class="h-5 w-5 shrink-0 {% if 'superadmin_device_types' in current_endpoint %}menu-item-icon-active{% else %}menu-item-icon-inactive{% endif %}"></i>
+                                <span class="truncate font-medium">Tipos de dispositivo</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="border-t border-[var(--line-color)] pt-4">
+                    <ul class="flex flex-col gap-1.5">
+                        <li>
+                            <a href="/"
+                                class="menu-item group menu-item-inactive">
+                                <i data-lucide="home" class="h-5 w-5 shrink-0 menu-item-icon-inactive"></i>
+                                <span class="truncate font-medium">Landing publica</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </div>
+</aside>

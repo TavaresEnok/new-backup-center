@@ -1,0 +1,288 @@
+<header class="sticky top-0 z-40 flex w-full bg-[var(--bg-app)] border-b border-[var(--line-color)]">
+    <div class="flex flex-col items-center justify-between grow lg:flex-row lg:px-6">
+
+        <!-- Header Left: Sidebar Toggle & Search -->
+        <div
+            class="flex items-center justify-between w-full gap-2 px-3 py-3 border-b border-[var(--line-color)] sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
+
+            <!-- Sidebar Toggle -->
+            <button @click.stop="if (window.innerWidth < 1024) { mobileSidebarOpen = !mobileSidebarOpen; } else { sidebarExpanded = !sidebarExpanded; }"
+                class="flex items-center justify-center w-10 h-10 text-[var(--text-muted)] border border-[var(--line-color)] rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors lg:h-11 lg:w-11">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+
+            <!-- Search Bar -->
+            {% set is_superadmin_page = request.endpoint and request.endpoint.startswith('superadmin_') %}
+            {% set hide_tenant_nav_search = request.endpoint in [
+                'tenant_devices.list_devices',
+                'tenant_groups.list_groups',
+                'tenant_operations.index',
+                'tenant_backups.list_backups',
+                'tenant_schedules.list_schedules',
+                'tenant_users.list_users',
+                'tenant_activity.list_activity'
+            ] %}
+            {% if is_superadmin_page %}
+            <div class="hidden md:block">
+                <form action="{{ url_for('superadmin_dashboard.search') }}" method="GET" class="relative">
+                    <button type="submit" class="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+                        <i data-lucide="search"
+                            class="w-5 h-5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"></i>
+                    </button>
+                    <input id="superadmin-global-search" type="text" name="q" value="{{ request.args.get('q', '') }}"
+                        placeholder="Buscar cliente, usuario, plano, fatura..."
+                        class="input-premium h-11 pl-11 pr-16 xl:w-[520px]" />
+                    <span
+                        class="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-[var(--line-color)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-muted)] xl:inline-flex">
+                        Ctrl K
+                    </span>
+                </form>
+            </div>
+            {% elif not hide_tenant_nav_search %}
+            <div class="hidden sm:block">
+                {% set tenant_search_action = url_for('tenant_devices.list_devices', tenant_slug=tenant_slug) if tenant_slug else '#' %}
+                {% set tenant_search_placeholder = 'Buscar dispositivos por nome ou IP...' %}
+                {% if request.endpoint == 'tenant_users.list_users' and tenant_slug %}
+                    {% set tenant_search_action = url_for('tenant_users.list_users', tenant_slug=tenant_slug) %}
+                    {% set tenant_search_placeholder = 'Buscar usuarios por nome ou e-mail...' %}
+                {% endif %}
+                <form
+                    action="{{ tenant_search_action }}"
+                    method="GET" class="relative">
+                    {% if request.endpoint == 'tenant_users.list_users' and request.args.get('status') %}
+                    <input type="hidden" name="status" value="{{ request.args.get('status') }}">
+                    {% endif %}
+                    <button type="submit" class="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+                        <i data-lucide="search"
+                            class="w-5 h-5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"></i>
+                    </button>
+                    <input type="text" name="q" value="{{ request.args.get('q', '') }}"
+                        placeholder="{{ tenant_search_placeholder }}"
+                        class="input-premium h-11 pl-11 xl:w-[500px]" />
+                </form>
+            </div>
+            {% endif %}
+
+            {% if superadmin_return_url and not is_superadmin_page %}
+            <a href="{{ superadmin_return_url }}"
+                class="inline-flex items-center gap-2 rounded-lg border border-[var(--line-color)] bg-[var(--card-bg)] px-3 py-2 text-xs font-semibold text-[var(--text-main)] shadow-sm transition-colors hover:bg-[var(--line-color)] sm:text-sm">
+                <i data-lucide="corner-up-left" class="h-4 w-4"></i>
+                <span class="hidden sm:inline">{{ superadmin_return_label }}</span>
+                <span class="sm:hidden">Admin</span>
+            </a>
+            {% endif %}
+
+        </div>
+
+        <!-- Header Right: Theme, Notifications, User -->
+        <div class="hidden lg:flex items-center justify-end gap-3 sm:gap-7">
+
+            <div class="flex items-center gap-2 2xsm:gap-4">
+                <!-- Theme Toggler (Functional) -->
+                <div x-data="{ 
+                    darkMode: localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+                }" x-init="
+                    if (darkMode) { document.documentElement.classList.add('dark'); }
+                    $watch('darkMode', val => { 
+                        localStorage.setItem('theme', val ? 'dark' : 'light');
+                        document.documentElement.classList.toggle('dark', val);
+                    })
+                ">
+                    <button @click="darkMode = !darkMode"
+                        class="relative flex h-11 w-11 items-center justify-center rounded-full text-gray-500 hover:text-brand-500 bg-[var(--line-color)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--card-border)] transition-colors">
+                        <i x-show="!darkMode" data-lucide="moon" class="w-5 h-5"></i>
+                        <i x-show="darkMode" data-lucide="sun" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Notifications Dropdown -->
+                <div class="relative">
+                    {% set notif_count = notifications_count|default(0) %}
+                    <button id="notifMenuBtn" type="button"
+                        class="relative flex h-11 w-11 items-center justify-center rounded-full text-gray-500 hover:text-brand-500 bg-[var(--line-color)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--card-border)] transition-colors">
+                        {% if notif_count > 0 %}
+                        <span
+                            class="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-brand-500 text-[10px] text-white ring-2 ring-white dark:ring-gray-900">
+                            {{ notif_count }}
+                        </span>
+                        {% endif %}
+                        <i data-lucide="bell" class="w-5 h-5"></i>
+                    </button>
+
+                    <!-- Notifications Panel -->
+                    <div id="notifMenuPanel"
+                        class="hidden absolute right-0 mt-4 w-80 rounded-xl border border-gray-200 bg-[var(--card-bg)] shadow-[var(--card-shadow)] border-[var(--card-border)] backdrop-blur-xl saturate-150">
+                        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                            <h4 class="font-semibold text-gray-800 dark:text-white">Notificacoes</h4>
+                            <span class="text-xs {% if notif_count > 0 %}text-brand-500{% else %}text-gray-500{% endif %}">
+                                {% if notif_count > 0 %}{{ notif_count }} novas{% else %}Sem novas{% endif %}
+                            </span>
+                        </div>
+                        <div class="max-h-80 overflow-y-auto">
+                            {% if notifications_list %}
+                                {% for notif in notifications_list %}
+                                    <div class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800 flex gap-3">
+                                        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-500/15 flex items-center justify-center">
+                                            <i data-lucide="bell" class="w-5 h-5 text-brand-500"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium text-gray-800 dark:text-white truncate">{{ notif.title }}</p>
+                                            <p class="text-xs text-[var(--text-muted)] truncate">{{ notif.message }}</p>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+                                    Sem notificacoes.
+                                </div>
+                            {% endif %}
+                        </div>
+                        <a href="{{ url_for('tenant_settings.notifications', tenant_slug=tenant_slug) if tenant_slug else '#' }}"
+                            class="block px-4 py-3 text-center text-sm font-medium text-brand-500 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-b-xl">
+                            Ver todas as notificacoes
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Menu -->
+            <div class="relative">
+                <button id="userMenuBtn" type="button" class="flex items-center gap-4" aria-haspopup="true" aria-expanded="false">
+                    <span class="hidden text-right lg:block">
+                        <span class="block text-sm font-medium text-[var(--text-main)]">{{
+                            session.get('user_name', 'Admin User') }}</span>
+                        <span class="block text-xs font-medium text-[var(--text-muted)]">
+                            {% set role = session.get('user_role', 'tenant_technician') %}
+                            {% if role == 'tenant_owner' %}
+                                Administrador Master
+                            {% elif role == 'tenant_admin' %}
+                                Administrador
+                            {% elif role == 'tenant_technician' %}
+                                Tecnico
+                            {% elif role == 'tenant_viewer' %}
+                                Visualizador
+                            {% elif role == 'super_admin' %}
+                                Super Admin
+                            {% else %}
+                                {{ role|replace('_', ' ')|title }}
+                            {% endif %}
+                        </span>
+                    </span>
+
+                    <div class="h-11 w-11 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-700">
+                        <!-- User Avatar -->
+                        <div
+                            class="h-full w-full bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white font-bold text-lg">
+                            {{ session.get('user_name', 'A')[0]|upper }}
+                        </div>
+                    </div>
+
+                    <i data-lucide="chevron-down"
+                        class="hidden w-4 h-4 text-gray-500 lg:block transition-transform duration-200"
+                        id="userMenuChevron"></i>
+                </button>
+
+                <!-- Dropdown -->
+                <div id="userMenuPanel"
+                    class="hidden absolute right-0 mt-4 flex w-[250px] flex-col rounded-xl border border-gray-200 bg-[var(--card-bg)] shadow-[var(--card-shadow)] border-[var(--card-border)] backdrop-blur-xl saturate-150">
+                    <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+                        <p class="text-sm font-medium text-gray-800 dark:text-white">{{ session.get('user_name', 'Admin
+                            User') }}</p>
+                        <p class="text-xs text-[var(--text-muted)]">{{ session.get('user_email',
+                            'admin@backup.center') }}</p>
+                    </div>
+                    <ul class="flex flex-col gap-1 px-4 py-4">
+                        {% if is_superadmin_page %}
+                        <li>
+                            <a href="{{ url_for('superadmin_dashboard.dashboard') }}"
+                                class="flex items-center gap-3 px-2 py-2 text-sm font-medium rounded-lg duration-200 ease-in-out hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                                Admin Dashboard
+                            </a>
+                        </li>
+                        {% else %}
+                        <li>
+                            <a href="{{ url_for('tenant_settings.profile', tenant_slug=tenant_slug) if tenant_slug else '#' }}"
+                                class="flex items-center gap-3 px-2 py-2 text-sm font-medium rounded-lg duration-200 ease-in-out hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                <i data-lucide="user" class="w-5 h-5"></i>
+                                Meu Perfil
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('tenant_settings.general_settings', tenant_slug=tenant_slug) if tenant_slug else '#' }}"
+                                class="flex items-center gap-3 px-2 py-2 text-sm font-medium rounded-lg duration-200 ease-in-out hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                <i data-lucide="settings" class="w-5 h-5"></i>
+                                Configuracoes
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    <div class="px-4 pb-4">
+                        <form action="{{ url_for('auth.logout') }}" method="POST">
+                            {% include 'partials/csrf.html' %}
+                            <button type="submit"
+                                class="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium text-white bg-error-500 rounded-lg hover:bg-error-600 transition-colors">
+                                <i data-lucide="log-out" class="w-4 h-4"></i>
+                                Sair
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</header>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const notifBtn = document.getElementById('notifMenuBtn');
+        const notifPanel = document.getElementById('notifMenuPanel');
+        const userBtn = document.getElementById('userMenuBtn');
+        const userPanel = document.getElementById('userMenuPanel');
+        const userChevron = document.getElementById('userMenuChevron');
+
+        if (!notifBtn || !notifPanel || !userBtn || !userPanel) return;
+
+        const closeNotif = () => { notifPanel.classList.add('hidden'); };
+        const closeUser = () => {
+            userPanel.classList.add('hidden');
+            if (userChevron) userChevron.classList.remove('rotate-180');
+            userBtn.setAttribute('aria-expanded', 'false');
+        };
+        const closeAll = () => { closeNotif(); closeUser(); };
+
+        // Defensive reset to avoid stale open states after cached navigation.
+        closeAll();
+        requestAnimationFrame(closeAll);
+
+        notifBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const willOpen = notifPanel.classList.contains('hidden');
+            closeAll();
+            if (willOpen) notifPanel.classList.remove('hidden');
+        });
+
+        userBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const willOpen = userPanel.classList.contains('hidden');
+            closeAll();
+            if (willOpen) userPanel.classList.remove('hidden');
+            userBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (userChevron) userChevron.classList.toggle('rotate-180', willOpen);
+        });
+
+        document.addEventListener('click', function (e) {
+            const insideNotif = notifPanel.contains(e.target) || notifBtn.contains(e.target);
+            const insideUser = userPanel.contains(e.target) || userBtn.contains(e.target);
+            if (!insideNotif && !insideUser) closeAll();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeAll();
+        });
+    });
+</script>

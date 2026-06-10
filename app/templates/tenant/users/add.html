@@ -1,0 +1,42 @@
+{% extends "base_redesign.html" %}
+{% block title %}Novo usuário · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}">Equipe</a><i data-lucide="chevron-right"></i><b>Novo usuário</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/users.py add_user): tenant, UserRole #}
+<div class="wrap" style="max-width:620px">
+  <a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px"><i data-lucide="arrow-left"></i>Voltar para Equipe</a>
+  <div class="page-h"><div class="eyebrow">Conta</div><h1>Novo usuário</h1><p>Crie um acesso e defina o nível de permissão.</p></div>
+
+  <form method="POST" action="{{ url_for('tenant_users.add_user', tenant_slug=tenant.slug) }}" class="panel panel-pad">
+    {% include 'partials/csrf.html' %}
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div><label class="lbl">Nome completo *</label><input type="text" id="full_name" name="full_name" required class="inp" placeholder="Ex.: João Silva"></div>
+      <div><label class="lbl">E-mail de acesso *</label><input type="email" id="email" name="email" required class="inp" placeholder="usuario@empresa.com"></div>
+      <div>
+        <label class="lbl">Nível de acesso *</label>
+        <select id="role" name="role" required class="inp">
+          <option value="TENANT_TECHNICIAN">Técnico (padrão)</option>
+          <option value="TENANT_ADMIN">Administrador</option>
+          <option value="TENANT_OWNER">Administrador Master</option>
+        </select>
+        <p class="faint" style="font-size:11.5px;margin-top:4px">Técnicos veem dispositivos e interagem com backups. Admins gerenciam usuários.</p>
+      </div>
+      <div>
+        <label class="lbl">Senha inicial *</label>
+        <div style="position:relative">
+          <input type="password" id="password" name="password" required minlength="6" class="inp" style="padding-right:38px" placeholder="••••••••">
+          <button type="button" onclick="togglePassword('password')" class="act" style="position:absolute;right:6px;top:50%;transform:translateY(-50%)" aria-label="Mostrar/ocultar senha"><i data-lucide="eye"></i></button>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
+      <a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-pine"><i data-lucide="user-plus"></i>Criar usuário</button>
+    </div>
+  </form>
+</div>
+<script>
+  function togglePassword(inputId){ const i = document.getElementById(inputId); if(!i) return; i.type = i.type === 'password' ? 'text' : 'password'; }
+</script>
+{% endblock %}

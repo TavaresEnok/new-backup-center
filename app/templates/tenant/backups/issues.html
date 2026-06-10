@@ -1,0 +1,72 @@
+{% extends "base_redesign.html" %}
+{% block title %}Pendências · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}">Histórico</a><i data-lucide="chevron-right"></i><b>Pendências</b>{% endblock %}
+
+{% macro issue_table(items) -%}
+  {% if items %}
+  <div class="sc" style="overflow-x:auto"><table class="tbl">
+    <thead><tr>
+      <th class="col-name">Dispositivo</th><th>Grupo</th><th class="col-sm shrink">Data do erro</th><th>Causa</th><th>Mensagem</th>
+    </tr></thead>
+    <tbody>
+      {% for backup in items %}
+      <tr>
+        <td class="col-name"><a class="dv-name" style="color:var(--pine)" href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=backup.device.id) }}">{{ backup.device.name }}</a></td>
+        <td class="faint" style="font-size:13px">{{ backup.device.group.name if backup.device.group else 'Sem grupo' }}</td>
+        <td class="col-sm shrink mono" style="font-family:var(--mono);font-size:12px;color:var(--ink-2)">{{ (backup.created_at|localtime).strftime('%d/%m/%Y %H:%M') if backup.created_at else '—' }}</td>
+        <td><span class="tag">{{ backup._failure_label if backup._failure_label else 'Outros' }}</span></td>
+        <td style="font-size:12.5px;color:var(--crit);font-family:var(--mono);max-width:380px">{{ backup.error_message or 'Falha sem mensagem detalhada.' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div style="padding:14px 18px;border-radius:11px;background:var(--good-soft);color:var(--good);font-size:13px">Nenhuma falha nesta categoria.</div>
+  {% endif %}
+{%- endmacro %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/backups.py failed_devices): tenant, auth_errors, conn_errors,
+   other_errors, detailed_breakdown[{label,count}]. Itens: Backup{device{id,name,group.name},
+   created_at, _failure_label, error_message} #}
+<div class="wrap">
+  <div class="page-h">
+    <div class="eyebrow">Saúde dos backups</div>
+    <h1>Pendências</h1>
+    <p>Último backup com erro por dispositivo, separado por tipo de falha para acelerar a correção.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:22px">
+    {% for lbl,val,col in [
+      ('Autenticação', auth_errors|length, 'var(--crit)'),
+      ('Conexão / Timeout', conn_errors|length, 'var(--care)'),
+      ('Outros erros', other_errors|length, 'var(--lilac)')
+    ] %}
+    <div class="panel panel-pad">
+      <div class="faint" style="font-size:12px;margin-bottom:8px">{{ lbl }}</div>
+      <div style="font-family:var(--serif);font-size:30px;line-height:1;color:{{ col }}">{{ val }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if detailed_breakdown %}
+  <div class="panel panel-pad" style="margin-bottom:22px">
+    <div class="faint" style="font-size:12px;margin-bottom:12px">Quebra detalhada da causa</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+      {% for item in detailed_breakdown %}
+      <div style="padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--inset)">
+        <div style="font-weight:600;font-size:12.5px">{{ item.label }}</div>
+        <div class="faint" style="font-size:11.5px;margin-top:2px">{{ item.count }} dispositivo(s)</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;flex-direction:column;gap:22px">
+    <div class="panel"><div class="panel-head"><h3><i data-lucide="key-round"></i>Autenticação</h3></div><div style="padding:0 8px 8px">{{ issue_table(auth_errors) }}</div></div>
+    <div class="panel"><div class="panel-head"><h3><i data-lucide="wifi-off"></i>Conexão / Timeout</h3></div><div style="padding:0 8px 8px">{{ issue_table(conn_errors) }}</div></div>
+    <div class="panel"><div class="panel-head"><h3><i data-lucide="alert-octagon"></i>Outros erros</h3></div><div style="padding:0 8px 8px">{{ issue_table(other_errors) }}</div></div>
+  </div>
+</div>
+{% endblock %}

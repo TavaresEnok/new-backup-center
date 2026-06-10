@@ -1,0 +1,90 @@
+{% extends "base_redesign.html" %}
+{% block title %}Novo grupo · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}">Grupos</a><i data-lucide="chevron-right"></i><b>Novo grupo</b>{% endblock %}
+
+{% block head %}
+<style>
+  .conn-opt{display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--line);cursor:pointer;transition:all .18s}
+  .conn-opt:hover{border-color:var(--line-2)}
+  .conn-opt.selected{border-color:var(--pine);background:var(--pine-soft)}
+  .conn-ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}
+  .conn-sec{border-radius:12px;padding:18px;margin-top:12px;border:1px solid var(--line);background:var(--inset)}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.frow{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/groups.py add_group): tenant. Form -> add_group #}
+<div class="wrap" style="max-width:760px">
+  <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px"><i data-lucide="arrow-left"></i>Voltar para Grupos</a>
+  <div class="page-h"><div class="eyebrow">Operação</div><h1>Novo grupo</h1><p>Crie um grupo para organizar seus dispositivos e definir o tipo de conexão.</p></div>
+
+  <form action="{{ url_for('tenant_groups.add_group', tenant_slug=tenant.slug) }}" method="POST" class="panel panel-pad" x-data="{ connectionType: 'direct' }">
+    {% include 'partials/csrf.html' %}
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div><label class="lbl">Nome do grupo *</label><input type="text" name="name" required class="inp" placeholder="Ex.: Provedor XYZ"></div>
+      <div><label class="lbl">Descrição</label><textarea name="description" class="inp" rows="3" placeholder="Descrição opcional do grupo…"></textarea></div>
+
+      <div style="padding-top:6px;border-top:1px solid var(--line)">
+        <label class="lbl" style="margin-bottom:10px">Tipo de conexão</label>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <label class="conn-opt" :class="{'selected': connectionType === 'direct'}">
+            <input type="radio" name="connection_type" value="direct" x-model="connectionType" checked style="margin-top:3px;accent-color:var(--pine);width:18px;height:18px">
+            <span class="conn-ic" style="background:var(--inset);color:var(--ink-3)"><i data-lucide="wifi"></i></span>
+            <div><div style="font-weight:600;font-size:14px">Conexão direta</div><div class="faint" style="font-size:12.5px">Conecta direto ao IP do dispositivo (SSH/Telnet)</div></div>
+          </label>
+          <label class="conn-opt" :class="{'selected': connectionType === 'vpn'}">
+            <input type="radio" name="connection_type" value="vpn" x-model="connectionType" style="margin-top:3px;accent-color:var(--pine);width:18px;height:18px">
+            <span class="conn-ic" style="background:rgba(139,92,246,.16);color:#8b5cf6"><i data-lucide="shield"></i></span>
+            <div><div style="font-weight:600;font-size:14px">VPN (L2TP/PPTP/WireGuard)</div><div class="faint" style="font-size:12.5px">Estabelece túnel VPN antes de conectar</div></div>
+          </label>
+          <label class="conn-opt" :class="{'selected': connectionType === 'jump_host'}">
+            <input type="radio" name="connection_type" value="jump_host" x-model="connectionType" style="margin-top:3px;accent-color:var(--pine);width:18px;height:18px">
+            <span class="conn-ic" style="background:var(--good-soft);color:var(--good)"><i data-lucide="git-branch"></i></span>
+            <div><div style="font-weight:600;font-size:14px">SSH Jump Host (Bastion)</div><div class="faint" style="font-size:12.5px">Conecta via servidor intermediário do provedor</div></div>
+          </label>
+
+          {# VPN #}
+          <div x-show="connectionType === 'vpn'" x-transition class="conn-sec">
+            <div style="font-weight:600;font-size:14px;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i data-lucide="shield" style="color:#8b5cf6"></i>Configurações VPN</div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div class="frow">
+                <div><label class="lbl">Tipo de VPN</label><select name="vpn_type" class="inp"><option value="l2tp" selected>L2TP/IPSec</option><option value="pptp">PPTP</option><option value="openvpn">OpenVPN</option><option value="wireguard">WireGuard</option></select></div>
+                <div><label class="lbl">Servidor VPN</label><input type="text" name="vpn_server" class="inp" placeholder="vpn.provedor.com.br"></div>
+              </div>
+              <div class="frow">
+                <div><label class="lbl">Usuário VPN</label><input type="text" name="vpn_username" class="inp" placeholder="usuario_vpn"></div>
+                <div><label class="lbl">Senha VPN</label><input type="password" name="vpn_password" class="inp" placeholder="••••••••"></div>
+              </div>
+              <div><label class="lbl">IPSec Secret (PSK)</label><input type="password" name="vpn_ipsec_secret" class="inp" placeholder="••••••••"></div>
+            </div>
+          </div>
+
+          {# Jump Host #}
+          <div x-show="connectionType === 'jump_host'" x-transition class="conn-sec">
+            <div style="font-weight:600;font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i data-lucide="git-branch" style="color:var(--good)"></i>Configurações Jump Host</div>
+            <div style="padding:12px;border-radius:10px;background:var(--good-soft);color:var(--good);font-size:12.5px;margin-bottom:14px"><i data-lucide="info" style="width:14px;height:14px;display:inline"></i> O Jump Host é um servidor Linux do provedor. O sistema conecta nele primeiro e depois nos dispositivos da rede interna.</div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div class="frow">
+                <div><label class="lbl">Host / IP do servidor *</label><input type="text" name="jump_host" class="inp" placeholder="ssh.provedor.com.br ou 200.x.x.x"></div>
+                <div><label class="lbl">Porta SSH</label><input type="number" name="jump_port" value="22" class="inp"></div>
+              </div>
+              <div class="frow">
+                <div><label class="lbl">Usuário SSH *</label><input type="text" name="jump_username" class="inp" placeholder="backup_user"></div>
+                <div><label class="lbl">Senha SSH</label><input type="password" name="jump_password" class="inp" placeholder="••••••••"></div>
+              </div>
+              <div><label class="lbl">Chave privada SSH (opcional)</label><textarea name="jump_key" class="inp" rows="3" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"></textarea><p class="faint" style="font-size:11.5px;margin-top:4px">Cole a chave para autenticação por chave. Em branco usa senha.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-top:18px;border-top:1px solid var(--line)">
+      <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-pine"><i data-lucide="plus"></i>Criar grupo</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Novo Cliente | Super Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page admin-page--narrow">
+    <div class="admin-page-header">
+        <div class="admin-page-header-copy">
+            <h1 class="admin-page-title">Criar cliente</h1>
+            <p class="admin-page-subtitle">Adicione uma nova empresa ao sistema com um owner inicial já vinculado.</p>
+        </div>
+    </div>
+
+    <form method="POST" class="premium-card admin-form-card">
+        {% include 'partials/csrf.html' %}
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+                <label for="name" class="admin-label">Nome da empresa</label>
+                <input type="text" name="name" id="name" required class="admin-control">
+            </div>
+            <div>
+                <label for="company_name" class="admin-label">Razao social</label>
+                <input type="text" name="company_name" id="company_name" class="admin-control">
+            </div>
+            <div class="md:col-span-2">
+                <label for="slug" class="admin-label">Slug</label>
+                <input type="text" name="slug" id="slug" required placeholder="ex: minha-empresa" class="admin-control">
+                <p class="admin-help">Identificador único na URL. Use apenas letras minúsculas, números e hífen.</p>
+            </div>
+            <div>
+                <label for="plan_id" class="admin-label">Plano inicial</label>
+                <select name="plan_id" id="plan_id" class="admin-control">
+                    <option value="">Selecione um plano</option>
+                    {% for plan in plans %}
+                    <option value="{{ plan.id }}">{{ plan.name }} • {{ plan.max_devices }} dispositivos</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <label class="admin-toggle-card">
+            <input type="checkbox" name="access_unlimited">
+            <span class="text-sm">Acesso ilimitado. Use apenas para clientes liberados manualmente sem depender do limite do plano.</span>
+        </label>
+
+        <div class="admin-form-section">
+            <div class="admin-form-heading">
+                <h2 class="admin-form-title">Dono do cliente</h2>
+                <p class="admin-form-copy">Esse usuário será criado como administrador master do novo ambiente.</p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="md:col-span-2">
+                    <label for="owner_full_name" class="admin-label">Nome completo</label>
+                    <input type="text" name="owner_full_name" id="owner_full_name" required class="admin-control">
+                </div>
+                <div>
+                    <label for="owner_email" class="admin-label">E-mail de acesso</label>
+                    <input type="email" name="owner_email" id="owner_email" required class="admin-control">
+                </div>
+                <div>
+                    <label for="owner_password" class="admin-label">Senha inicial</label>
+                    <input type="password" name="owner_password" id="owner_password" required class="admin-control">
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-form-actions">
+            <a href="{{ url_for('superadmin_tenants.list_tenants') }}"
+                class="rounded-lg border border-[var(--card-border)] px-4 py-2.5 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                Cancelar
+            </a>
+            <button type="submit"
+                class="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                Criar cliente
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

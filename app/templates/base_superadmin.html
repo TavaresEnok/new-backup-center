@@ -1,0 +1,208 @@
+{% extends "base_redesign.html" %}
+
+{# ===================================================================
+   Base do Super Admin no design system "Quiet Operations".
+   - output.css (head_pre) entra ANTES do redesign.css apenas para os
+     utilitarios de LAYOUT do Tailwind (grid/flex/spacing) usados no markup.
+   - O skin admin (block head, DEPOIS do redesign.css) redefine todas as
+     classes admin (hero-card, metric-card, admin-table, status-badge...)
+     com tokens: serif, accent pine, surfaces, SEM gradiente/azul.
+   - A navegacao lateral usa o rail do design system.
+   =================================================================== #}
+
+{% block head_pre %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}?v=admin-layout">
+{% endblock %}
+
+{% block head %}
+<style>
+  /* ====== Skin Super Admin — Quiet Operations (tokens) ====== */
+  /* Mapeia as variaveis legadas usadas no markup para os tokens do design */
+  :root, html.dark {
+    --card-bg: var(--surface); --card-border: var(--line);
+    --text-main: var(--ink); --text-muted: var(--ink-3);
+    --bg-app: var(--bg); --line-color: var(--line);
+  }
+  .command-shell { max-width: 1320px; margin: 0 auto; padding: 8px 0 24px; }
+
+  /* Grids dos containers admin (Tailwind grid-cols-* precisa de display:grid) */
+  .admin-card-grid { display: grid; gap: 16px; }
+  .admin-summary-strip { width: 100%; }
+  .admin-inline-filters { display: grid; gap: 12px; }
+  @media (min-width: 1024px) { .admin-inline-filters { grid-template-columns: var(--admin-filter-columns, 1fr); align-items: center; } }
+  .admin-inline-actions { display: flex; gap: 8px; align-items: center; }
+  .admin-page--compact { gap: 1.1rem; }
+  .admin-page-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .admin-page-header-copy { display: flex; flex-direction: column; gap: .4rem; }
+  .admin-page-header-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+  /* Cards / surfaces */
+  .hero-card, .surface-card, .stack-card, .list-card, .chart-card, .metric-card, .drill-shell {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r3); box-shadow: var(--sh-1);
+  }
+  .hero-card { padding: 28px 30px; }
+  .stack-card, .list-card, .chart-card, .surface-card { padding: 22px 24px; }
+  .metric-card { padding: 20px 22px; }
+  .muted-card { background: var(--surface-2); }
+  .drill-shell { padding: 24px 26px; }
+
+  /* Headings */
+  .hero-card h1 { font-family: var(--serif) !important; font-weight: 400 !important; font-size: clamp(28px,3.4vw,38px) !important; letter-spacing: -.02em; line-height: 1.1; color: var(--ink); }
+  .hero-copy, .list-copy, .muted-copy { color: var(--ink-2); font-size: 14px; line-height: 1.6; }
+  .muted-copy { color: var(--ink-3); font-size: 12.5px; }
+  .section-title { font-family: var(--serif); font-weight: 400; font-size: 19px; letter-spacing: -.01em; color: var(--ink); }
+  .list-kicker, .stack-kicker { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  .list-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+
+  /* Metrics */
+  .metric-label, .hero-metric-label { font-size: 12.5px; color: var(--ink-3); }
+  .metric-value { font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.05; color: var(--ink); margin-top: 4px; }
+  .metric-copy { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+  .hero-metric { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r2); padding: 16px 18px; }
+  .hero-metric-value { font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1; color: var(--ink); margin-top: 4px; }
+
+  /* Chips / strips */
+  .status-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+  .status-chip, .pill-chip, .chart-legend-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ink-2); background: var(--inset); border: 1px solid var(--line); border-radius: var(--pill); padding: 5px 12px; }
+  .anchor-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--pill); padding: 7px 14px; transition: all .15s; }
+  .anchor-chip:hover { border-color: var(--line-2); color: var(--ink); }
+  .anchor-chip-active { background: var(--pine-soft); border-color: var(--pine); color: var(--pine-deep); font-weight: 600; }
+
+  /* Lists / feeds / queue */
+  .queue-list, .mini-list, .alerts-feed, .activity-feed, .tenants-feed { display: flex; flex-direction: column; gap: 10px; }
+  .queue-item, .mini-row, .feed-item { display: flex; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r2); background: var(--surface); transition: border-color .15s, background .15s; }
+  .muted-card .queue-item, .muted-card .feed-item { background: var(--surface); }
+  .queue-item { align-items: flex-start; }
+  .mini-row { align-items: center; justify-content: space-between; }
+  a.queue-item:hover, a.mini-row:hover, .feed-item-link:hover, .drill-trigger:hover { border-color: var(--line-2); background: var(--surface-2); }
+  .queue-title, .mini-row-title, .feed-item-title { font-weight: 600; font-size: 14px; color: var(--ink); }
+  .queue-value { font-family: var(--serif); font-size: 26px; font-weight: 400; line-height: 1.1; margin-top: 2px; }
+  .mini-row-value { font-family: var(--mono); font-weight: 600; font-size: 15px; color: var(--ink); }
+  .feed-item-meta { font-size: 12.5px; color: var(--ink-3); }
+  .queue-link { display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--pine); }
+  .queue-dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; margin-top: 6px; background: var(--ink-3); }
+  .queue-dot-critical { background: var(--crit); }
+  .queue-dot-warning { background: var(--care); }
+  .queue-dot-good { background: var(--good); }
+  .drill-trigger-active { border-color: var(--pine) !important; box-shadow: 0 0 0 1px var(--pine) inset; }
+
+  /* Progress */
+  .progress-track { height: 7px; border-radius: 999px; background: var(--inset); overflow: hidden; }
+  .progress-bar { height: 100%; border-radius: 999px; background: var(--pine); }
+  .progress-bar-success { background: var(--good); }
+  .progress-bar-warning { background: var(--care); }
+  .progress-bar-danger { background: var(--crit); }
+
+  /* Status badges */
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; border-radius: 7px; padding: 4px 9px; background: var(--inset); color: var(--ink-2); }
+  .status-badge-success { background: var(--good-soft); color: var(--good); }
+  .status-badge-warning { background: var(--care-soft); color: var(--care); }
+  .status-badge-danger { background: var(--crit-soft); color: var(--crit); }
+  .status-badge-neutral { background: var(--inset); color: var(--ink-2); }
+
+  /* Tables */
+  .table-shell { overflow-x: auto; }
+  .admin-table { width: 100%; border-collapse: collapse; }
+  .admin-table th { text-align: left; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .admin-table td { padding: 13px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; color: var(--ink); vertical-align: middle; }
+  .admin-table tbody tr:hover { background: var(--surface-2); }
+  .admin-table tbody tr:last-child td { border-bottom: 0; }
+
+  /* Charts */
+  .chart-wrap { position: relative; height: 260px; }
+  .drill-filter-badge { font-size: 12.5px; color: var(--ink-2); background: var(--inset); border: 1px solid var(--line); border-radius: var(--pill); padding: 6px 12px; }
+
+  /* Accent normalization — substitui utilitarios de cor do Tailwind pelo token */
+  .text-blue-500, .text-blue-400, .text-blue-600, .hover\:text-blue-400:hover { color: var(--pine) !important; }
+  .text-rose-300, .text-rose-400, .text-rose-500, .text-red-500 { color: var(--crit) !important; }
+  .text-amber-300, .text-amber-400, .text-yellow-500 { color: var(--care) !important; }
+  .text-emerald-300, .text-emerald-400, .text-green-500 { color: var(--good) !important; }
+  .text-indigo-300, .text-indigo-400 { color: var(--lilac) !important; }
+  .ring-blue-500:focus { box-shadow: 0 0 0 3px var(--pine-ring) !important; }
+
+  /* Botoes/badges com background do Tailwind -> tokens */
+  .bg-brand-600, .bg-brand-500, .bg-blue-600, .bg-blue-500 { background-color: var(--pine) !important; color: #fff !important; }
+  .hover\:bg-brand-700:hover, .hover\:bg-blue-700:hover, .hover\:bg-brand-600:hover { background-color: var(--pine-deep) !important; }
+  .bg-emerald-500\/15, .bg-emerald-500\/10 { background-color: var(--good-soft) !important; }
+  .bg-rose-500\/15, .bg-rose-500\/10, .bg-red-500\/10 { background-color: var(--crit-soft) !important; }
+  .bg-amber-500\/15, .bg-amber-500\/10, .bg-yellow-500\/10 { background-color: var(--care-soft) !important; }
+  .bg-indigo-500\/15, .bg-indigo-500\/10 { background-color: var(--lilac-soft) !important; }
+  .hover\:bg-rose-500\/10:hover { background-color: var(--crit-soft) !important; }
+  .border-rose-500\/30, .border-rose-500\/40 { border-color: color-mix(in srgb, var(--crit) 36%, var(--line)) !important; }
+  /* Botoes "outline" neutros que usam border + hover line */
+  .hover\:bg-\[var\(--line-color\)\]:hover { background-color: var(--surface-2) !important; }
+
+  /* Forms admin (algumas telas usam admin-*) */
+  .admin-page { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }
+  .admin-page--narrow { max-width: 920px; }
+  .admin-page-title { font-family: var(--serif); font-weight: 400; font-size: 30px; letter-spacing: -.015em; color: var(--ink); }
+  .admin-page-subtitle { font-size: 14px; color: var(--ink-2); line-height: 1.55; max-width: 60ch; }
+  .admin-card, .admin-form-card, .premium-card, .admin-filter-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2); padding: 24px; box-shadow: var(--sh-1); }
+  .admin-form-section { display: flex; flex-direction: column; gap: 1rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
+  .admin-form-title { font-weight: 600; font-size: 15px; color: var(--ink); }
+  .admin-form-copy, .admin-help { font-size: 12.5px; color: var(--ink-3); line-height: 1.5; }
+  .admin-form-actions, .admin-table-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .admin-form-actions { justify-content: flex-end; padding-top: .25rem; }
+  .admin-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+  .admin-control { display: block; width: 100%; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); border-radius: var(--r1); padding: 11px 14px; font-size: 14px; font-family: var(--sans); outline: none; transition: border-color .15s, box-shadow .15s; }
+  .admin-control:focus { border-color: var(--pine); box-shadow: 0 0 0 3px var(--pine-ring); }
+  .admin-toggle-card { display: flex; align-items: center; gap: .7rem; border: 1px solid var(--line); border-radius: var(--r1); background: var(--surface-2); padding: 12px 14px; color: var(--ink); }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+{% set ep = request.endpoint|default('') %}
+<aside class="rail" id="rail">
+  <div class="rail-head">
+    <a href="{{ url_for('superadmin_dashboard.dashboard') }}" class="brand-mark" title="Backup Center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/><path d="M12 7v5l3 2"/><path d="M21 4v5h-5"/></svg>
+    </a>
+    <div class="brand-name">Backup Center<small>Super Admin</small></div>
+  </div>
+
+  <div class="rail-status">
+    <span class="rs-ic"><i data-lucide="shield"></i></span>
+    <div><div class="rs-t">Painel administrativo</div><div class="rs-s">Plataforma</div></div>
+  </div>
+
+  <nav class="nav sc">
+    <div class="nav-group-label">Visão</div>
+    <a href="{{ url_for('superadmin_dashboard.dashboard') }}" class="nav-link {% if ep == 'superadmin_dashboard.dashboard' %}on{% endif %}">
+      <i data-lucide="layout-dashboard"></i><span class="nav-label">Dashboard</span>
+    </a>
+    <a href="{{ url_for('superadmin_dashboard.search') }}" class="nav-link {% if ep == 'superadmin_dashboard.search' %}on{% endif %}">
+      <i data-lucide="search"></i><span class="nav-label">Busca global</span>
+    </a>
+
+    <div class="nav-group-label">Clientes e receita</div>
+    <a href="{{ url_for('superadmin_tenants.list_tenants') }}" class="nav-link {% if 'superadmin_tenants' in ep %}on{% endif %}">
+      <i data-lucide="building-2"></i><span class="nav-label">Clientes</span>
+    </a>
+    <a href="{{ url_for('superadmin_billing.list_billing') }}" class="nav-link {% if 'superadmin_billing' in ep %}on{% endif %}">
+      <i data-lucide="receipt-text"></i><span class="nav-label">Cobrança</span>
+    </a>
+    <a href="{{ url_for('superadmin_plans.list_plans') }}" class="nav-link {% if 'superadmin_plans' in ep %}on{% endif %}">
+      <i data-lucide="credit-card"></i><span class="nav-label">Planos</span>
+    </a>
+
+    <div class="nav-group-label">Acesso</div>
+    <a href="{{ url_for('superadmin_users.list_users') }}" class="nav-link {% if 'superadmin_users' in ep %}on{% endif %}">
+      <i data-lucide="users"></i><span class="nav-label">Usuários</span>
+    </a>
+
+    <div class="nav-group-label">Catálogo</div>
+    <a href="{{ url_for('superadmin_device_types.list_types') }}" class="nav-link {% if 'superadmin_device_types' in ep %}on{% endif %}">
+      <i data-lucide="cpu"></i><span class="nav-label">Tipos de dispositivo</span>
+    </a>
+
+    <div class="nav-group-label">Outros</div>
+    <a href="/" class="nav-link"><i data-lucide="home"></i><span class="nav-label">Landing pública</span></a>
+  </nav>
+
+  <div class="rail-foot">
+    <button class="rail-toggle" id="railMin" type="button">
+      <i data-lucide="panel-left-close"></i><span>Recolher</span>
+    </button>
+  </div>
+</aside>
+{% endblock %}

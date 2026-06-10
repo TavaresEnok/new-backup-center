@@ -1,0 +1,53 @@
+{% extends "base_redesign.html" %}
+{% block title %}Editar {{ user.full_name }} · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}">Equipe</a><i data-lucide="chevron-right"></i><b>Editar usuário</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/users.py edit_user): tenant, user, UserRole #}
+<div class="wrap" style="max-width:620px">
+  <a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px"><i data-lucide="arrow-left"></i>Voltar para Equipe</a>
+  <div class="page-h"><div class="eyebrow">Conta</div><h1>Editar usuário</h1><p>Atualize os dados, o nível de acesso e o status.</p></div>
+
+  <form method="POST" action="{{ url_for('tenant_users.edit_user', tenant_slug=tenant.slug, user_id=user.id) }}" class="panel panel-pad">
+    {% include 'partials/csrf.html' %}
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div><label class="lbl">Nome completo *</label><input type="text" id="full_name" name="full_name" value="{{ user.full_name }}" required class="inp"></div>
+      <div><label class="lbl">E-mail de acesso *</label><input type="email" id="email" name="email" value="{{ user.email }}" required class="inp"></div>
+      <div>
+        <label class="lbl">Nível de acesso *</label>
+        <select id="role" name="role" required class="inp">
+          <option value="TENANT_TECHNICIAN" {% if user.role==UserRole.TENANT_TECHNICIAN %}selected{% endif %}>Técnico (padrão)</option>
+          <option value="TENANT_ADMIN" {% if user.role==UserRole.TENANT_ADMIN %}selected{% endif %}>Administrador</option>
+          <option value="TENANT_OWNER" {% if user.role==UserRole.TENANT_OWNER %}selected{% endif %}>Administrador Master</option>
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13.5px">
+        <input type="checkbox" id="is_active" name="is_active" {% if user.is_active %}checked{% endif %} style="width:17px;height:17px;accent-color:var(--pine)">Usuário ativo
+      </label>
+      <div style="padding-top:6px;border-top:1px solid var(--line)">
+        <label class="lbl">Alterar senha</label>
+        <div style="position:relative">
+          <input type="password" id="password" name="password" minlength="6" class="inp" style="padding-right:38px" placeholder="Deixe em branco para manter a atual">
+          <button type="button" onclick="togglePassword('password')" class="act" style="position:absolute;right:6px;top:50%;transform:translateY(-50%)" aria-label="Mostrar/ocultar senha"><i data-lucide="eye"></i></button>
+        </div>
+        <p class="faint" style="font-size:11.5px;margin-top:4px">Preencha apenas se desejar redefinir a senha do usuário.</p>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line);flex-wrap:wrap">
+      <button type="button" onclick="confirmDelete()" class="btn btn-line" style="border-color:var(--crit);color:var(--crit)"><i data-lucide="trash-2"></i>Excluir usuário</button>
+      <div style="display:flex;gap:12px">
+        <a href="{{ url_for('tenant_users.list_users', tenant_slug=tenant.slug) }}" class="btn btn-ghost">Cancelar</a>
+        <button type="submit" class="btn btn-pine"><i data-lucide="check"></i>Salvar alterações</button>
+      </div>
+    </div>
+  </form>
+
+  <form id="delete-form" action="{{ url_for('tenant_users.delete_user', tenant_slug=tenant.slug, user_id=user.id) }}" method="POST" class="hidden" style="display:none">
+    {% include 'partials/csrf.html' %}
+  </form>
+</div>
+<script>
+  function togglePassword(inputId){ const i = document.getElementById(inputId); if(!i) return; i.type = i.type === 'password' ? 'text' : 'password'; }
+  function confirmDelete(){ if(confirm('Tem certeza que deseja desativar este usuário? Ele perderá o acesso imediatamente.')) document.getElementById('delete-form').submit(); }
+</script>
+{% endblock %}

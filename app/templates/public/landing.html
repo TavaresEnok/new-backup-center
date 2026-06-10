@@ -1,0 +1,320 @@
+{# Landing publica — standalone (sem sidebar, sem tenant).
+   Redesign "Quiet Operations": editorial, tokens do redesign.css, sem gradientes. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backup Center - Automação Inteligente de Backups de Rede</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/redesign.css') }}?v=20260608-uifix">
+  <script src="https://unpkg.com/lucide@latest" defer></script>
+  <script>document.documentElement.classList.toggle('dark', localStorage.getItem('bc-theme')==='dark')</script>
+  <style>
+    .lp { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .lp-section { padding: 96px 0; }
+    .lp-eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--pine); background: var(--pine-soft); border: 1px solid var(--pine-soft); padding: 6px 12px; border-radius: var(--pill); }
+    .lp-eyebrow svg { width: 14px; height: 14px; }
+    .lp-h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3.6vw, 40px); letter-spacing: -.02em; line-height: 1.1; margin: 18px 0 12px; }
+    .lp-sub { font-size: 16px; color: var(--ink-2); line-height: 1.65; max-width: 60ch; }
+    .lp-head { text-align: center; display: flex; flex-direction: column; align-items: center; margin-bottom: 52px; }
+    .lp-head .lp-sub { margin-left: auto; margin-right: auto; }
+    .lp-btn-lg { padding: 13px 22px; font-size: 15px; border-radius: var(--r2); }
+
+    /* Nav */
+    .lp-nav { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid transparent; transition: border-color .2s, background .2s; }
+    .lp-nav.scrolled { border-bottom-color: var(--line); background: color-mix(in srgb, var(--bg) 94%, transparent); }
+    .lp-nav-in { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+    .lp-logo { display: flex; align-items: center; gap: 11px; font-family: var(--serif); font-size: 20px; font-weight: 500; letter-spacing: -.01em; }
+    .lp-logo-ic { width: 38px; height: 38px; border-radius: 11px; background: var(--pine); color: #fff; display: grid; place-items: center; box-shadow: var(--sh-2); }
+    .lp-logo-ic svg { width: 20px; height: 20px; }
+    .lp-menu { display: flex; gap: 30px; }
+    .lp-menu a { font-size: 14px; color: var(--ink-2); transition: color .15s; }
+    .lp-menu a:hover { color: var(--ink); }
+    .lp-nav-cta { display: flex; align-items: center; gap: 12px; }
+
+    /* Hero */
+    .lp-hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; padding: 72px 0 84px; }
+    .lp-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); padding: 6px 13px; border-radius: var(--pill); }
+    .lp-badge .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+    .lp-title { font-family: var(--serif); font-weight: 400; font-size: clamp(38px, 5.2vw, 60px); line-height: 1.05; letter-spacing: -.025em; margin: 22px 0 18px; }
+    .lp-title em { font-style: normal; color: var(--pine); }
+    .lp-hero .lp-sub { font-size: 17px; }
+    .lp-hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin: 30px 0 36px; }
+    .lp-trust-label { font-size: 12px; color: var(--ink-3); letter-spacing: .04em; margin: 0 0 12px; }
+    .lp-trust { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+    .lp-trust span { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: .06em; color: var(--ink-3); }
+
+    .lp-mock { border-radius: var(--r3); overflow: hidden; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--sh-3); }
+    .lp-mock-bar { display: flex; gap: 7px; padding: 13px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+    .lp-mock-bar i { width: 11px; height: 11px; border-radius: 999px; background: var(--line-2); }
+    .lp-mock img { display: block; width: 100%; height: auto; }
+
+    /* Stats */
+    .lp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r2); overflow: hidden; }
+    .lp-stat { background: var(--surface); padding: 30px 24px; text-align: center; }
+    .lp-stat .v { font-family: var(--serif); font-size: 38px; font-weight: 400; line-height: 1; }
+    .lp-stat .l { font-size: 13px; color: var(--ink-3); margin-top: 8px; }
+
+    /* Cards grids */
+    .lp-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .lp-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+    .lp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r2); padding: 26px; box-shadow: var(--sh-1); transition: border-color .18s, box-shadow .18s, transform .18s; }
+    .lp-card:hover { border-color: var(--line-2); box-shadow: var(--sh-2); transform: translateY(-2px); }
+    .lp-ic { width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center; margin-bottom: 18px; }
+    .lp-ic svg { width: 24px; height: 24px; stroke-width: 1.7; }
+    .lp-ic.pine { background: var(--pine-soft); color: var(--pine); }
+    .lp-ic.good { background: var(--good-soft); color: var(--good); }
+    .lp-ic.lilac { background: var(--lilac-soft); color: var(--lilac); }
+    .lp-ic.care { background: var(--care-soft); color: var(--care); }
+    .lp-ic.blue { background: var(--calm-blue-soft); color: var(--calm-blue); }
+    .lp-ic.crit { background: var(--crit-soft); color: var(--crit); }
+    .lp-card h3 { font-size: 17px; font-weight: 600; margin: 0 0 8px; letter-spacing: -.01em; }
+    .lp-card p { font-size: 14px; color: var(--ink-2); line-height: 1.6; margin: 0; }
+
+    /* Steps */
+    .lp-step .n { font-family: var(--serif); font-size: 40px; font-weight: 400; color: var(--pine); line-height: 1; }
+    .lp-step h4 { font-size: 16px; font-weight: 600; margin: 14px 0 7px; }
+    .lp-step p { font-size: 14px; color: var(--ink-2); line-height: 1.55; margin: 0; }
+
+    /* Testimonials */
+    .lp-stars { display: flex; gap: 3px; color: var(--care); margin-bottom: 14px; }
+    .lp-stars svg { width: 17px; height: 17px; fill: currentColor; }
+    .lp-quote { font-size: 15px; color: var(--ink); line-height: 1.65; margin: 0 0 20px; }
+    .lp-author { display: flex; align-items: center; gap: 12px; }
+    .lp-avatar { width: 42px; height: 42px; border-radius: 999px; background: var(--pine-soft); color: var(--pine-deep); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+    .lp-author .nm { font-weight: 600; font-size: 14px; }
+    .lp-author .rl { font-size: 12.5px; color: var(--ink-3); }
+
+    /* Pricing */
+    .lp-price-card { display: flex; flex-direction: column; position: relative; }
+    .lp-price-card.featured { border-color: var(--pine); box-shadow: 0 0 0 1px var(--pine) inset, var(--sh-2); }
+    .lp-price-badge { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: var(--pine); color: #fff; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 5px 14px; border-radius: var(--pill); }
+    .lp-price-name { font-family: var(--serif); font-size: 23px; font-weight: 400; }
+    .lp-price-desc { font-size: 13px; color: var(--ink-3); margin: 6px 0 18px; }
+    .lp-price-amt { font-family: var(--mono); font-size: 34px; font-weight: 600; line-height: 1; }
+    .lp-price-per { font-size: 13px; color: var(--ink-3); }
+    .lp-price-feats { list-style: none; margin: 22px 0; padding: 0; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+    .lp-price-feats li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-2); }
+    .lp-price-feats svg { width: 17px; height: 17px; color: var(--good); flex-shrink: 0; }
+
+    /* CTA */
+    .lp-cta { background: var(--pine-tint); border: 1px solid var(--line); border-radius: var(--r4); padding: 64px 40px; text-align: center; }
+
+    /* Footer */
+    .lp-footer { border-top: 1px solid var(--line); padding: 32px 0; }
+    .lp-footer-in { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    .lp-footer-in p { font-size: 13px; color: var(--ink-3); margin: 0; }
+    .lp-footer-links { display: flex; gap: 22px; flex-wrap: wrap; }
+    .lp-footer-links a { font-size: 13px; color: var(--ink-2); transition: color .15s; }
+    .lp-footer-links a:hover { color: var(--pine); }
+
+    @media (max-width: 900px) {
+      .lp-hero { grid-template-columns: 1fr; gap: 40px; }
+      .lp-menu { display: none; }
+      .lp-stats, .lp-grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .lp-grid-3 { grid-template-columns: 1fr; }
+      .lp-section { padding: 64px 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="lp-nav" id="navbar">
+  <div class="lp lp-nav-in">
+    <a href="/" class="lp-logo">
+      <span class="lp-logo-ic"><i data-lucide="shield-check"></i></span>
+      Backup Center
+    </a>
+    <div class="lp-menu">
+      <a href="#features">Recursos</a>
+      <a href="#how">Como Funciona</a>
+      <a href="#testimonials">Depoimentos</a>
+      <a href="#pricing">Preços</a>
+    </div>
+    <div class="lp-nav-cta">
+      <a href="{{ url_for('auth.login') }}" class="btn btn-line">Entrar</a>
+      <a href="{{ url_for('auth.register') }}" class="btn btn-pine">Começar grátis<i data-lucide="arrow-right"></i></a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="lp">
+  <div class="lp-hero">
+    <div>
+      <span class="lp-badge"><span class="dot"></span>Novo: Suporte a SSH Jump Host</span>
+      <h1 class="lp-title">Backups de rede<br><em>100% automatizados</em></h1>
+      <p class="lp-sub">A plataforma definitiva para proteger a configuração de todos os seus ativos de rede. Mikrotik, OLTs, Switches e Roteadores — tudo em um só lugar, com segurança total.</p>
+      <div class="lp-hero-btns">
+        <a href="{{ url_for('auth.register') }}" class="btn btn-pine lp-btn-lg"><i data-lucide="zap"></i>Teste grátis por 14 dias</a>
+        <a href="#how" class="btn btn-line lp-btn-lg"><i data-lucide="play-circle"></i>Ver demonstração</a>
+      </div>
+      <div>
+        <p class="lp-trust-label">Compatível com os principais fabricantes</p>
+        <div class="lp-trust">
+          <span>MIKROTIK</span><span>HUAWEI</span><span>CISCO</span><span>DATACOM</span><span>ZTE</span>
+        </div>
+      </div>
+    </div>
+    <div class="lp-mock">
+      <div class="lp-mock-bar"><i></i><i></i><i></i></div>
+      <img src="{{ url_for('static', filename='images/dashboard-hero.png') }}" alt="Dashboard Backup Center">
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<section class="lp" style="padding-bottom:24px">
+  <div class="lp-stats">
+    <div class="lp-stat"><div class="v">6.000+</div><div class="l">Backups realizados</div></div>
+    <div class="lp-stat"><div class="v">99.9%</div><div class="l">Uptime garantido</div></div>
+    <div class="lp-stat"><div class="v">50+</div><div class="l">Tipos de equipamentos</div></div>
+    <div class="lp-stat"><div class="v">24/7</div><div class="l">Monitoramento ativo</div></div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features" class="lp lp-section">
+  <div class="lp-head">
+    <span class="lp-eyebrow"><i data-lucide="sparkles"></i>Recursos</span>
+    <h2 class="lp-h2">Tudo que você precisa para proteger sua rede</h2>
+    <p class="lp-sub">Uma plataforma completa para gerenciar backups de toda sua infraestrutura com segurança e automação inteligente.</p>
+  </div>
+  <div class="lp-grid-3">
+    <div class="lp-card"><div class="lp-ic pine"><i data-lucide="clock"></i></div><h3>Agendamento inteligente</h3><p>Configure backups por hora, dia, semana ou mês. Defina janelas de manutenção e horários de baixo tráfego automaticamente.</p></div>
+    <div class="lp-card"><div class="lp-ic good"><i data-lucide="shield-check"></i></div><h3>Criptografia AES-256</h3><p>Todas as credenciais e backups são protegidos com criptografia de nível militar. Conformidade total com LGPD e padrões internacionais.</p></div>
+    <div class="lp-card"><div class="lp-ic lilac"><i data-lucide="git-compare"></i></div><h3>Diff visual de configs</h3><p>Compare diferentes versões de configuração lado a lado. Identifique mudanças críticas instantaneamente com destaque visual.</p></div>
+    <div class="lp-card"><div class="lp-ic care"><i data-lucide="bell-ring"></i></div><h3>Alertas multi-canal</h3><p>Receba notificações por email, Telegram ou webhook sobre falhas, sucessos e mudanças críticas de configuração em tempo real.</p></div>
+    <div class="lp-card"><div class="lp-ic blue"><i data-lucide="network"></i></div><h3>Jump Host & VPN</h3><p>Conecte-se a redes isoladas via SSH Jump Host ou VPN L2TP/WireGuard. Acesso seguro a qualquer topologia de rede.</p></div>
+    <div class="lp-card"><div class="lp-ic pine"><i data-lucide="building-2"></i></div><h3>Multi-Tenant</h3><p>Ideal para provedores e MSPs. Separe clientes em tenants isolados com permissões granulares e branding customizado.</p></div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section id="how" class="lp lp-section" style="padding-top:0">
+  <div class="lp-head">
+    <span class="lp-eyebrow"><i data-lucide="route"></i>Como Funciona</span>
+    <h2 class="lp-h2">Comece em minutos, não em horas</h2>
+    <p class="lp-sub">Configuração simples em 4 passos para proteger toda sua infraestrutura de rede.</p>
+  </div>
+  <div class="lp-grid-4">
+    <div class="lp-card lp-step"><div class="n">1</div><h4>Crie sua conta</h4><p>Cadastre-se gratuitamente em menos de 1 minuto.</p></div>
+    <div class="lp-card lp-step"><div class="n">2</div><h4>Adicione dispositivos</h4><p>Importe via CSV ou adicione manualmente seus equipamentos.</p></div>
+    <div class="lp-card lp-step"><div class="n">3</div><h4>Configure horários</h4><p>Defina frequência e janelas de backup automáticos.</p></div>
+    <div class="lp-card lp-step"><div class="n">4</div><h4>Relaxe</h4><p>O sistema cuida de tudo. Alertas apenas quando necessário.</p></div>
+  </div>
+</section>
+
+<!-- Testimonials -->
+<section id="testimonials" class="lp lp-section" style="padding-top:0">
+  <div class="lp-head">
+    <span class="lp-eyebrow"><i data-lucide="message-square-quote"></i>Depoimentos</span>
+    <h2 class="lp-h2">O que nossos clientes dizem</h2>
+    <p class="lp-sub">Provedores de todo o Brasil confiam no Backup Center para proteger sua infraestrutura.</p>
+  </div>
+  <div class="lp-grid-3">
+    <div class="lp-card">
+      <div class="lp-stars"><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i></div>
+      <p class="lp-quote">"Antes perdíamos horas fazendo backups manuais. Agora é tudo automatizado e recebo alertas no Telegram quando algo falha. Incrível!"</p>
+      <div class="lp-author"><div class="lp-avatar">RS</div><div><div class="nm">Ricardo Silva</div><div class="rl">CTO, NetLink Telecom</div></div></div>
+    </div>
+    <div class="lp-card">
+      <div class="lp-stars"><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i></div>
+      <p class="lp-quote">"O suporte a Jump Host foi um game-changer. Consigo fazer backup de OLTs em redes que antes eram impossíveis de acessar remotamente."</p>
+      <div class="lp-author"><div class="lp-avatar">AF</div><div><div class="nm">Ana Ferreira</div><div class="rl">Gerente de TI, ViaFibra</div></div></div>
+    </div>
+    <div class="lp-card">
+      <div class="lp-stars"><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i><i data-lucide="star"></i></div>
+      <p class="lp-quote">"Interface linda e fácil de usar. A comparação visual de configs nos salvou de um problema sério de configuração em produção."</p>
+      <div class="lp-author"><div class="lp-avatar">MC</div><div><div class="nm">Marcos Costa</div><div class="rl">NOC Manager, InternetSul</div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing" class="lp lp-section" style="padding-top:0">
+  <div class="lp-head">
+    <span class="lp-eyebrow"><i data-lucide="credit-card"></i>Preços</span>
+    <h2 class="lp-h2">Planos que crescem com você</h2>
+    <p class="lp-sub">Comece grátis e escale conforme sua necessidade. Sem surpresas na fatura.</p>
+  </div>
+  <div class="lp-grid-3">
+    {% for plan in plans %}
+    <div class="lp-card lp-price-card {% if plan.popular %}featured{% endif %}">
+      {% if plan.popular %}<span class="lp-price-badge">Mais popular</span>{% endif %}
+      <div class="lp-price-name">{{ plan.name }}</div>
+      <p class="lp-price-desc">
+        {% if plan.name == 'Iniciante' %}Ideal para começar{% endif %}
+        {% if plan.name == 'Profissional' %}Para equipes em crescimento{% endif %}
+        {% if plan.name == 'Enterprise' %}Solução corporativa completa{% endif %}
+      </p>
+      <div>
+        <span class="lp-price-amt">{{ plan.price.split('/')[0] if '/' in plan.price else plan.price }}</span>
+        {% if plan.name != 'Iniciante' and plan.name != 'Enterprise' %}<span class="lp-price-per">/mês</span>{% endif %}
+      </div>
+      <ul class="lp-price-feats">
+        <li><i data-lucide="check"></i><span><strong>{{ plan.devices }}</strong> dispositivos</span></li>
+        {% for feature in plan.features %}
+        <li><i data-lucide="check"></i><span>{{ feature }}</span></li>
+        {% endfor %}
+      </ul>
+      <a href="{{ url_for('auth.register') }}" class="btn {% if plan.popular %}btn-pine{% else %}btn-line{% endif %}" style="width:100%;justify-content:center">
+        {% if plan.name == 'Enterprise' %}Falar com vendas{% else %}Começar agora{% endif %}
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="lp lp-section" style="padding-top:0">
+  <div class="lp-cta">
+    <h2 class="lp-h2" style="margin-top:0">Pronto para proteger sua rede?</h2>
+    <p class="lp-sub" style="margin:0 auto 28px">Junte-se a centenas de provedores que já automatizaram seus backups. Comece seu trial gratuito de 14 dias — sem cartão de crédito.</p>
+    <div class="lp-hero-btns" style="justify-content:center;margin:0">
+      <a href="{{ url_for('auth.register') }}" class="btn btn-pine lp-btn-lg"><i data-lucide="rocket"></i>Iniciar trial gratuito</a>
+      <a href="mailto:contato@backupcenter.com.br" class="btn btn-line lp-btn-lg"><i data-lucide="message-circle"></i>Falar com especialista</a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="lp-footer">
+  <div class="lp lp-footer-in">
+    <p>© 2024 Backup Center. Todos os direitos reservados.</p>
+    <div class="lp-footer-links">
+      <a href="#">Termos de Uso</a>
+      <a href="#">Privacidade</a>
+      <a href="#">Documentação</a>
+      <a href="#">API</a>
+      <a href="#">Suporte</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.lucide) lucide.createIcons();
+    var navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', function () {
+      navbar.classList.toggle('scrolled', window.scrollY > 20);
+    });
+    document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+      anchor.addEventListener('click', function (e) {
+        var target = document.querySelector(this.getAttribute('href'));
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      });
+    });
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { entry.target.style.opacity = '1'; entry.target.style.transform = 'translateY(0)'; }
+      });
+    }, { threshold: 0.08 });
+    document.querySelectorAll('.lp-card, .lp-stat').forEach(function (el) {
+      el.style.opacity = '0'; el.style.transform = 'translateY(24px)'; el.style.transition = 'all .5s ease-out';
+      observer.observe(el);
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Configuração de Pagamentos | Super Admin{% endblock %}
+
+{% block content %}
+<style>
+  .billing-settings-shell { max-width: 1320px; margin: 0 auto; }
+  .settings-hero, .settings-card { border: 1px solid var(--line); border-radius: var(--r3); background: var(--surface); box-shadow: var(--sh-1); }
+</style>
+
+<div class="billing-settings-shell space-y-5 pb-4">
+    <section class="settings-hero p-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-400">Billing</p>
+                <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-[var(--text-main)]">Configuração de pagamentos</h1>
+                <p class="mt-2 max-w-3xl text-sm text-[var(--text-muted)]">Visão restrita ao superadmin para validar a integração do checkout online. Nenhum detalhe técnico do gateway aparece para os clientes.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ url_for('superadmin_billing.list_billing') }}"
+                    class="inline-flex items-center rounded-lg border border-[var(--card-border)] px-3 py-2 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                    Voltar para cobrança
+                </a>
+            </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2 text-xs">
+            {% if ready %}
+            <span class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">Checkout online pronto</span>
+            {% else %}
+            <span class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">Configuração incompleta</span>
+            {% endif %}
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">Modo: {{ 'Sandbox' if sandbox_mode else 'Produção' }}</span>
+            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">Webhook efetivo: {{ effective_webhook or 'não definido' }}</span>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-3">
+            <form method="POST" action="{{ url_for('superadmin_billing.payment_settings_mode') }}">
+                {% include 'partials/csrf.html' %}
+                <input type="hidden" name="mode" value="production">
+                <button type="submit"
+                    class="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold transition {% if not sandbox_mode %}bg-emerald-600 text-white hover:bg-emerald-700{% else %}border border-[var(--card-border)] text-[var(--text-main)] hover:bg-[var(--line-color)]{% endif %}">
+                    Usar Produção
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('superadmin_billing.payment_settings_mode') }}">
+                {% include 'partials/csrf.html' %}
+                <input type="hidden" name="mode" value="sandbox">
+                <button type="submit"
+                    class="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold transition {% if sandbox_mode %}bg-amber-500 text-slate-950 hover:bg-amber-400{% else %}border border-[var(--card-border)] text-[var(--text-main)] hover:bg-[var(--line-color)]{% endif %}">
+                    Usar Sandbox
+                </button>
+            </form>
+            <p class="self-center text-xs text-[var(--text-muted)]">A troca de ambiente mantém os segredos já salvos. Só altere token e chave se quiser trocar de conta.</p>
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <section class="settings-card p-4 xl:col-span-2">
+            <div class="mb-4">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Editar integração</h2>
+                <p class="mt-1 text-sm text-[var(--text-muted)]">Configuração persistida no banco para que a operação do Mercado Pago não fique dependente de código ou edição manual de ambiente.</p>
+            </div>
+            <form method="POST" class="space-y-4">
+                {% include 'partials/csrf.html' %}
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="text-sm font-medium text-[var(--text-main)]">APP_PUBLIC_URL</label>
+                        <input type="url" name="app_public_url" value="{{ form_data.app_public_url }}"
+                            placeholder="https://backupcenter.ajustconsulting.com.br"
+                            class="admin-control mt-2">
+                        <p class="mt-2 text-xs text-[var(--text-muted)]">Base pública usada no checkout, retorno e webhook derivado.</p>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-[var(--text-main)]">Webhook URL customizada</label>
+                        <input type="url" name="mercado_pago_webhook_url" value="{{ form_data.mercado_pago_webhook_url }}"
+                            placeholder="Opcional. Se vazio, usa APP_PUBLIC_URL + /webhooks/billing/mercadopago"
+                            class="admin-control mt-2">
+                        <p class="mt-2 text-xs text-[var(--text-muted)]">Use apenas se quiser separar o endpoint público do webhook.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="rounded-xl border border-[var(--line-color)] p-4">
+                        <label class="text-sm font-medium text-[var(--text-main)]">Access Token</label>
+                        <input type="password" name="mercado_pago_access_token"
+                            placeholder="{{ 'Preenchido no momento. Informe novo valor para trocar a conta.' if form_data.has_access_token else 'APP_USR-...' }}"
+                            class="admin-control mt-2">
+                        <p class="mt-2 text-xs text-[var(--text-muted)]">Deixe em branco para manter o token atual.</p>
+                        <label class="mt-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                            <input type="checkbox" name="clear_access_token" class="rounded border-[var(--line-color)]">
+                            Limpar token atual salvo
+                        </label>
+                    </div>
+                    <div class="rounded-xl border border-[var(--line-color)] p-4">
+                        <label class="text-sm font-medium text-[var(--text-main)]">Public Key</label>
+                        <input type="password" name="mercado_pago_public_key"
+                            placeholder="{{ 'Preenchida no momento. Informe novo valor para trocar.' if form_data.has_public_key else 'APP_USR-...' }}"
+                            class="admin-control mt-2">
+                        <p class="mt-2 text-xs text-[var(--text-muted)]">Deixe em branco para manter a chave atual.</p>
+                        <label class="mt-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                            <input type="checkbox" name="clear_public_key" class="rounded border-[var(--line-color)]">
+                            Limpar chave pública salva
+                        </label>
+                    </div>
+                    <div class="rounded-xl border border-[var(--line-color)] p-4">
+                        <label class="text-sm font-medium text-[var(--text-main)]">Webhook Token</label>
+                        <input type="password" name="mercado_pago_webhook_token"
+                            placeholder="{{ 'Preenchido no momento. Informe novo valor para trocar.' if form_data.has_webhook_token else 'Token opcional para proteger o webhook' }}"
+                            class="admin-control mt-2">
+                        <p class="mt-2 text-xs text-[var(--text-muted)]">Deixe em branco para manter o token atual.</p>
+                        <label class="mt-3 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                            <input type="checkbox" name="clear_webhook_token" class="rounded border-[var(--line-color)]">
+                            Limpar token do webhook salvo
+                        </label>
+                    </div>
+                </div>
+
+                <label class="admin-toggle-card">
+                    <input type="checkbox" name="mercado_pago_use_sandbox" {% if form_data.mercado_pago_use_sandbox %}checked{% endif %}>
+                    <span>
+                        <span class="block text-sm font-semibold text-[var(--text-main)]">Usar Sandbox</span>
+                        <span class="block text-xs text-[var(--text-muted)]">Ative para testar pagamentos em conta de homologação do Mercado Pago. Para trocar só o ambiente, use os botões no topo.</span>
+                    </span>
+                </label>
+
+                <div class="flex flex-wrap gap-3">
+                    <button type="submit"
+                        class="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+                        Salvar configuração
+                    </button>
+                    <button type="submit"
+                        formaction="{{ url_for('superadmin_billing.payment_settings_test') }}"
+                        formmethod="POST"
+                        class="inline-flex items-center rounded-lg border border-[var(--card-border)] px-4 py-2.5 text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                        Testar integração
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="settings-card p-4">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Diagnóstico</h2>
+            </div>
+            {% if ready %}
+            <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <p class="text-sm font-semibold text-emerald-300">Integração pronta</p>
+                <p class="mt-2 text-sm text-[var(--text-main)]">O cliente pode usar o checkout online sem ver qualquer detalhe técnico da configuração.</p>
+            </div>
+            {% else %}
+            <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <p class="text-sm font-semibold text-amber-300">Pendências obrigatórias</p>
+                <ul class="mt-3 space-y-2 text-sm text-[var(--text-main)]">
+                    {% for item in missing_required %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+                <p class="mt-3 text-sm text-[var(--text-muted)]">Enquanto isso, o cliente vê apenas que o pagamento online está indisponível, sem exposição de variáveis ou infraestrutura.</p>
+            </div>
+            {% endif %}
+
+            <div class="mt-4 rounded-xl border border-[var(--line-color)] p-4">
+                <p class="text-sm font-semibold text-[var(--text-main)]">Boa prática</p>
+                <p class="mt-2 text-sm text-[var(--text-muted)]">Os segredos do gateway ficam criptografados no banco e podem ser trocados a qualquer momento pelo superadmin.</p>
+            </div>
+        </section>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <section class="settings-card p-4 xl:col-span-2">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Checklist da integração</h2>
+                <p class="mt-1 text-sm text-[var(--text-muted)]">Itens obrigatórios e opcionais da configuração do Mercado Pago no ambiente.</p>
+            </div>
+            <div class="space-y-3">
+                {% for item in setup_items %}
+                <div class="rounded-xl border border-[var(--line-color)] p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-semibold text-[var(--text-main)]">{{ item.name }}</p>
+                            <p class="mt-1 text-sm text-[var(--text-muted)]">{{ item.description }}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            {% if item.required %}
+                            <span class="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-blue-300">Obrigatório</span>
+                            {% else %}
+                            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">Opcional</span>
+                            {% endif %}
+
+                            {% if item.configured %}
+                            <span class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">Configurado</span>
+                            {% else %}
+                            <span class="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-rose-300">Ausente</span>
+                            {% endif %}
+
+                            {% if item.value is defined %}
+                            <span class="rounded-lg border border-[var(--line-color)] px-2.5 py-1 text-[var(--text-main)]">{{ item.value }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        <section class="settings-card p-4">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Resumo atual</h2>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div class="rounded-xl border border-[var(--line-color)] p-4">
+                    <p class="font-semibold text-[var(--text-main)]">Conta do Mercado Pago</p>
+                    <p class="mt-2 text-[var(--text-muted)]">{{ 'Configurada' if form_data.has_access_token else 'Nao configurada' }}</p>
+                </div>
+                <div class="rounded-xl border border-[var(--line-color)] p-4">
+                    <p class="font-semibold text-[var(--text-main)]">Webhook token</p>
+                    <p class="mt-2 text-[var(--text-muted)]">{{ 'Configurado' if form_data.has_webhook_token else 'Nao configurado' }}</p>
+                </div>
+                <div class="rounded-xl border border-[var(--line-color)] p-4">
+                    <p class="font-semibold text-[var(--text-main)]">Ambiente</p>
+                    <p class="mt-2 text-[var(--text-muted)]">{{ 'Sandbox' if form_data.mercado_pago_use_sandbox else 'Produção' }}</p>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

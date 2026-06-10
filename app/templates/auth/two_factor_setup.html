@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar 2FA | Backup Center</title>
+
+    <link href="{{ url_for('static', filename='css/redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/auth_redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body>
+    <main class="auth-page" x-data="{ copied: false }">
+        <div class="auth-shell auth-shell-setup">
+            <section class="auth-card">
+                <div class="auth-brand">
+                    <div class="brand-mark">
+                        <i data-lucide="shield-check"></i>
+                    </div>
+                    <div class="auth-brand-copy">
+                        <strong>Backup Center</strong>
+                        <span>Seguranca adicional</span>
+                    </div>
+                </div>
+
+                <header class="auth-head">
+                    <p class="eyebrow">Autenticacao em 2 fatores</p>
+                    <h1>Configurar 2FA</h1>
+                    <p>Conta: <span class="account">{{ email }}</span></p>
+                </header>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="auth-flashes">
+                    {% for category, message in messages %}
+                    <div class="auth-flash {% if category == 'success' %}is-success{% elif category == 'warning' %}is-warning{% elif category == 'info' %}is-info{% elif category == 'danger' %}is-danger{% else %}is-error{% endif %}">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                <div class="auth-setup-grid">
+                    <section class="auth-qr-panel" aria-label="QR Code de configuracao 2FA">
+                        <div class="auth-qr-box">
+                            <div id="otp-qrcode"></div>
+                        </div>
+                    </section>
+
+                    <section class="auth-instructions">
+                        <div class="auth-step">
+                            <span class="auth-step-num">1</span>
+                            <div>
+                                <strong>Abra seu app autenticador</strong>
+                                <span>Google Authenticator, Microsoft Authenticator, Authy ou outro app compativel.</span>
+                            </div>
+                        </div>
+                        <div class="auth-step">
+                            <span class="auth-step-num">2</span>
+                            <div>
+                                <strong>Escaneie o QR Code</strong>
+                                <span>Depois informe o codigo de 6 digitos para confirmar a protecao da conta.</span>
+                            </div>
+                        </div>
+
+                        <div class="auth-secret">
+                            <label for="secret" class="auth-label">Chave secreta</label>
+                            <div class="auth-secret-row">
+                                <div class="field auth-field">
+                                    <i data-lucide="key-round"></i>
+                                    <input id="secret" type="text" readonly value="{{ secret }}" class="mono">
+                                </div>
+                                <button type="button"
+                                    @click="navigator.clipboard.writeText(document.getElementById('secret').value); copied=true; setTimeout(() => copied=false, 1800)"
+                                    class="btn btn-line">
+                                    <i data-lucide="copy"></i>
+                                    Copiar
+                                </button>
+                            </div>
+                            <p x-show="copied" x-transition class="auth-copy-state" x-cloak>Chave copiada.</p>
+                        </div>
+
+                        <details class="auth-details">
+                            <summary>URI manual (otpauth)</summary>
+                            <textarea readonly rows="3">{{ otp_uri }}</textarea>
+                        </details>
+                    </section>
+                </div>
+
+                <form action="{{ url_for('auth.two_factor_setup') }}" method="POST" class="auth-form">
+                    {% include 'partials/csrf.html' %}
+                    <div class="auth-field-group">
+                        <label for="code" class="auth-label">Codigo de verificacao</label>
+                        <div class="field auth-field auth-field-code">
+                            <i data-lucide="badge-check"></i>
+                            <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="000000" autocomplete="one-time-code">
+                        </div>
+                    </div>
+
+                    <div class="auth-actions">
+                        <button type="submit" class="btn btn-pine">
+                            <i data-lucide="check-circle-2"></i>
+                            Confirmar e entrar
+                        </button>
+                    </div>
+                </form>
+
+                <form action="{{ url_for('auth.two_factor_cancel') }}" method="POST" class="auth-separator">
+                    {% include 'partials/csrf.html' %}
+                    <button type="submit" class="btn btn-line">
+                        <i data-lucide="arrow-left"></i>
+                        Cancelar e voltar ao login
+                    </button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        new QRCode(document.getElementById("otp-qrcode"), {
+            text: {{ otp_uri | tojson }},
+            width: 220,
+            height: 220,
+            colorDark: "#111318",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,194 @@
+{% extends "base_redesign.html" %}
+{% block title %}Tempo real · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Tempo real</b>{% endblock %}
+
+{% block head %}
+<style>
+  .act-toggle{display:inline-flex;align-items:center;padding:7px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font-size:12.5px;font-weight:500;text-decoration:none;cursor:pointer}
+  .act-toggle:first-child{border-radius:9px 0 0 9px}.act-toggle:last-child{border-radius:0 9px 9px 0;border-left:0}
+  .act-toggle.active{background:var(--pine-soft);border-color:var(--pine);color:var(--pine-deep);font-weight:600}
+  .act-toggle.warn.active{background:var(--care-soft);border-color:var(--care);color:var(--care)}
+  .act-terminal{background:#0c0e14;border-radius:12px;padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.7;color:#cbd5e1;max-height:380px;overflow-y:auto}
+  .act-terminal-line{white-space:pre-wrap;word-break:break-word}
+  .act-status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:var(--care-soft);color:var(--care);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .act-status-chip.ok{background:var(--good-soft);color:var(--good)}.act-status-chip.error{background:var(--crit-soft);color:var(--crit)}
+  .act-tag{display:inline-flex;padding:3px 9px;border-radius:7px;font-size:11px;font-weight:600;background:var(--inset);color:var(--ink-2)}
+  .act-tag.ok{background:var(--good-soft);color:var(--good)}.act-tag.err{background:var(--crit-soft);color:var(--crit)}.act-tag.warn{background:var(--care-soft);color:var(--care)}.act-tag.info{background:var(--pine-soft);color:var(--pine-deep)}
+  .act-user{display:flex;align-items:center;gap:9px}
+  .act-user-ico{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--pine-soft);color:var(--pine);flex-shrink:0}
+  .act-user-ico.bot{background:var(--inset);color:var(--ink-3)}
+  .act-user-name{font-weight:600;font-size:12.5px}.act-user-role{font-size:10.5px;color:var(--ink-3)}
+  .act-ip-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:4px 8px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);cursor:pointer}
+  .act-page-btn{display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;text-decoration:none}
+  .act-page-btn.active{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .act-select{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px}
+  @keyframes act-spin{to{transform:rotate(360deg)}}.animate-spin{animation:act-spin 1s linear infinite}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/activity.py list_activity): tenant, logs, total_logs, page, per_page,
+   total_pages, has_next, has_prev, next_page, prev_page, view_mode, live_mode #}
+{% set is_alerts_view = (view_mode|default('logs')) == 'alerts' %}
+<div class="wrap">
+  <div class="page-h head-row" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+    <div><div class="eyebrow" style="display:flex;align-items:center;gap:7px"><span class="pulse" style="width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block"></span>Conectado · atualizando ao vivo</div><h1>Tempo real</h1><p>Monitoramento em tempo real do motor de tarefas e registro de auditoria.</p></div>
+    <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap">
+      <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-ghost"><i data-lucide="arrow-left"></i>Voltar</a>
+      <button id="exportCsvBtn" type="button" class="btn btn-line"><i data-lucide="download"></i>Exportar CSV</button>
+    </div>
+  </div>
+
+  <div style="margin-bottom:18px;display:inline-flex">
+    <a href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant.slug, live=1, view='logs') }}" class="act-toggle {% if not is_alerts_view %}active{% endif %}">Tudo</a>
+    <a href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant.slug, live=1, view='alerts') }}" class="act-toggle warn {% if is_alerts_view %}active{% endif %}">Somente alertas</a>
+  </div>
+
+  {% if live_mode %}
+  <section class="panel panel-pad" style="margin-bottom:22px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <div><div style="font-weight:600;font-size:14px">Status do motor (Celery)</div><div class="faint" style="font-size:12px">Monitoramento em tempo real dos workers e heartbeat.</div></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span id="globalLiveStatus" class="act-status-chip">Conectando…</span>
+        <button id="refreshLiveLogs" type="button" class="btn btn-line btn-sm"><i data-lucide="refresh-cw"></i>Checar status</button>
+      </div>
+    </div>
+    <div id="global-live-log-stream" class="act-terminal" role="log" aria-live="polite">
+      <div class="act-terminal-line"><span style="color:#64748b">[{{ (logs[0].created_at|localtime).strftime('%Y-%m-%d %H:%M:%S') if logs and logs[0].created_at else '--:--:--' }}]</span> aguardando novos eventos…</div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if not live_mode %}
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    <div><h2 style="font-family:var(--serif);font-weight:400;font-size:18px;margin:0">Registro de atividades</h2><p class="faint" style="font-size:12.5px;margin-top:2px">Histórico completo de auditoria do sistema.</p></div>
+    <span id="totalLogsCount" class="faint" style="font-size:12.5px">{{ total_logs }} registros no total</span>
+  </div>
+
+  <section class="panel panel-pad" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+    <div class="field" style="flex:1;min-width:220px"><i data-lucide="search"></i><input id="logSearchInput" type="text" placeholder="Filtrar por usuário, ação, detalhes ou IP…"></div>
+    <select id="dateRangeFilter" class="act-select"><option value="24h">Data: últimas 24 horas</option><option value="7d">Data: últimos 7 dias</option><option value="30d">Data: últimos 30 dias</option><option value="all">Data: todas</option></select>
+    <select id="actionFilter" class="act-select"><option value="all">Ação: todas</option><option value="login">Logins</option><option value="modify">Modificações</option><option value="system">Ações de sistema</option></select>
+  </section>
+
+  <section class="panel" id="activityTableCard">
+    <div class="sc" style="overflow-x:auto"><table class="tbl" id="activityTable">
+      <thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th><th style="text-align:right">Endereço IP</th></tr></thead>
+      <tbody id="activityTableBody">
+        {% for log in logs %}
+        {% set user_name = log.user.full_name if log.user and log.user.full_name else 'System' %}
+        {% set action_upper = (log.action or 'UNKNOWN')|upper %}
+        {% if 'LOGIN' in action_upper %}{% set action_category = 'login' %}{% elif 'UPDATE' in action_upper or 'CREATE' in action_upper or 'DELETE' in action_upper or 'EDIT' in action_upper or 'PAUSE' in action_upper %}{% set action_category = 'modify' %}{% else %}{% set action_category = 'system' %}{% endif %}
+        {% if 'SUCCESS' in action_upper or 'UP' in action_upper or 'START' in action_upper %}{% set action_style = 'ok' %}{% elif 'FAIL' in action_upper or 'ERROR' in action_upper or 'DOWN' in action_upper or 'DELETE' in action_upper %}{% set action_style = 'err' %}{% elif 'PAUSE' in action_upper or 'STOP' in action_upper or 'WARN' in action_upper %}{% set action_style = 'warn' %}{% else %}{% set action_style = 'info' %}{% endif %}
+        <tr class="act-log-row" data-created="{{ (log.created_at|localtime).strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '' }}" data-search="{{ (user_name ~ ' ' ~ (log.action or '') ~ ' ' ~ (log.details or '') ~ ' ' ~ (log.ip_address or '127.0.0.1'))|lower }}" data-category="{{ action_category }}" data-ip="{{ log.ip_address or '127.0.0.1' }}">
+          <td class="mono" style="font-family:var(--mono);color:var(--ink-3);font-size:11.5px">{{ (log.created_at|localtime).strftime('%Y-%m-%d %H:%M:%S') if log.created_at else '—' }}</td>
+          <td><div class="act-user"><span class="act-user-ico {% if not log.user %}bot{% endif %}">{% if log.user %}<i data-lucide="user"></i>{% else %}<i data-lucide="server"></i>{% endif %}</span><div><div class="act-user-name">{{ user_name }}</div><div class="act-user-role">{% if log.user %}Usuário{% else %}Bot{% endif %}</div></div></div></td>
+          <td><span class="act-tag {{ action_style }}">{{ log.action or 'UNKNOWN' }}</span></td>
+          <td style="max-width:360px"><div class="faint" style="font-size:12.5px">{{ log.details or '—' }}</div></td>
+          <td style="text-align:right"><button type="button" class="act-ip-btn" data-copy-ip="{{ log.ip_address or '127.0.0.1' }}" title="Copiar IP"><span>{{ log.ip_address or '127.0.0.1' }}</span><i data-lucide="copy" class="copy-ico" style="width:13px;height:13px"></i><i data-lucide="check" class="check-ico" style="width:13px;height:13px;display:none;color:var(--good)"></i></button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+
+    <div id="emptyLogsState" class="empty" style="display:none"><div class="empty-ic"><i data-lucide="inbox"></i></div><h4>Nenhum registro</h4><p>Nenhum registro encontrado para os filtros atuais.</p></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:14px 26px;border-top:1px solid var(--line)">
+      {% set page_start = ((page - 1) * per_page) + 1 if total_logs > 0 else 0 %}
+      {% set page_end = ((page - 1) * per_page) + (logs|length) if total_logs > 0 else 0 %}
+      {% set user_filter = request.args.get('user_id') %}
+      {% set block_size = 8 %}{% set block_index = ((page - 1) // block_size) %}{% set page_first = (block_index * block_size) + 1 %}{% set page_last = page_first + block_size - 1 %}{% if page_last > total_pages %}{% set page_last = total_pages %}{% endif %}
+      <span id="pagerInfo" class="faint" style="font-size:12px">Mostrando {{ page_start }}-{{ page_end }} de {{ total_logs }} registros</span>
+      <div id="pagerLinks" style="display:flex;gap:6px;flex-wrap:wrap">
+        {% if has_prev %}<a class="act-page-btn" href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant.slug, page=prev_page, per_page=per_page, live=1 if live_mode else None, view=view_mode, user_id=user_filter) }}">Anterior</a>{% else %}<button type="button" class="act-page-btn" disabled style="opacity:.55">Anterior</button>{% endif %}
+        {% for p in range(page_first, page_last + 1) %}{% if p == page %}<span class="act-page-btn active">{{ p }}</span>{% else %}<a class="act-page-btn" href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant.slug, page=p, per_page=per_page, live=1 if live_mode else None, view=view_mode, user_id=user_filter) }}">{{ p }}</a>{% endif %}{% endfor %}
+        {% if has_next %}<a class="act-page-btn" href="{{ url_for('tenant_activity.list_activity', tenant_slug=tenant.slug, page=next_page, per_page=per_page, live=1 if live_mode else None, view=view_mode, user_id=user_filter) }}">Próximo</a>{% else %}<button type="button" class="act-page-btn" disabled style="opacity:.55">Próximo</button>{% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  const tableBody = document.getElementById('activityTableBody');
+  const rows = Array.from(document.querySelectorAll('.act-log-row'));
+  const searchInput = document.getElementById('logSearchInput');
+  const dateRangeFilter = document.getElementById('dateRangeFilter');
+  const actionFilter = document.getElementById('actionFilter');
+  const pagerInfo = document.getElementById('pagerInfo');
+  const emptyState = document.getElementById('emptyLogsState');
+  const totalLogsCount = document.getElementById('totalLogsCount');
+  const exportCsvBtn = document.getElementById('exportCsvBtn');
+  const perPage = rows.length || 1; let currentPage = 1; let filteredRows = rows.slice();
+  function parseDate(value){ if (!value) return null; const d = new Date(value.replace(' ', 'T')); return Number.isNaN(d.getTime()) ? null : d; }
+  function inDateRange(rowDate, range){ if (!rowDate || range === 'all') return true; const diffMs = Date.now() - rowDate.getTime(); const dayMs = 864e5; if (range === '24h') return diffMs <= dayMs; if (range === '7d') return diffMs <= 7*dayMs; if (range === '30d') return diffMs <= 30*dayMs; return true; }
+  function applyFilters(){
+    const q = (searchInput?.value || '').trim().toLowerCase(); const dateRange = (dateRangeFilter?.value || 'all'); const category = (actionFilter?.value || 'all');
+    filteredRows = rows.filter((row) => { const s = !q || (row.dataset.search || '').includes(q); const c = category === 'all' || (row.dataset.category === category); const d = inDateRange(parseDate(row.dataset.created), dateRange); return s && c && d; });
+    if (totalLogsCount) totalLogsCount.textContent = `${filteredRows.length} registros nesta página`;
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / perPage)); if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * perPage; const end = start + perPage;
+    rows.forEach((row) => { row.style.display = 'none'; });
+    filteredRows.forEach((row, index) => { if (index >= start && index < end) row.style.display = ''; });
+    if (emptyState) emptyState.style.display = filteredRows.length === 0 ? '' : 'none';
+    if (pagerInfo) { const from = filteredRows.length === 0 ? 0 : (start + 1); const to = filteredRows.length === 0 ? 0 : Math.min(end, filteredRows.length); pagerInfo.textContent = `Mostrando ${from}-${to} de ${filteredRows.length} registros`; }
+  }
+  if (searchInput) searchInput.addEventListener('input', () => { currentPage = 1; applyFilters(); });
+  if (dateRangeFilter) dateRangeFilter.addEventListener('change', () => { currentPage = 1; applyFilters(); });
+  if (actionFilter) actionFilter.addEventListener('change', () => { currentPage = 1; applyFilters(); });
+  document.querySelectorAll('[data-copy-ip]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const ip = btn.getAttribute('data-copy-ip') || ''; const copyIcon = btn.querySelector('.copy-ico'); const checkIcon = btn.querySelector('.check-ico');
+      try {
+        if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(ip); }
+        else { const ta = document.createElement('textarea'); ta.value = ip; ta.style.position='fixed'; ta.style.left='-999999px'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+        if (copyIcon) copyIcon.style.display = 'none'; if (checkIcon) checkIcon.style.display = '';
+        setTimeout(() => { if (checkIcon) checkIcon.style.display = 'none'; if (copyIcon) copyIcon.style.display = ''; }, 1400);
+      } catch (_) { if (copyIcon) copyIcon.style.display = ''; if (checkIcon) checkIcon.style.display = 'none'; }
+    });
+  });
+  if (exportCsvBtn) {
+    exportCsvBtn.addEventListener('click', () => {
+      const lines = ['"data_hora","usuario","acao","detalhes","ip"']; const safe = (v) => String(v || '').replace(/"/g, '""');
+      filteredRows.forEach((row) => { const cells = row.querySelectorAll('td'); if (cells.length < 5) return; const date = row.dataset.created || ''; const user = cells[1].querySelector('.act-user-name')?.textContent?.trim() || ''; const action = cells[2].textContent.trim(); const details = cells[3].textContent.trim(); const ip = row.dataset.ip || ''; lines.push(`"${safe(date)}","${safe(user)}","${safe(action)}","${safe(details)}","${safe(ip)}"`); });
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `logs_atividade_${new Date().toISOString().slice(0, 10)}.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    });
+  }
+  if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+  applyFilters();
+
+  const liveEnabled = {{ 'true' if live_mode else 'false' }};
+  if (!liveEnabled) return;
+  const stream = document.getElementById('global-live-log-stream'); const statusChip = document.getElementById('globalLiveStatus'); const refreshBtn = document.getElementById('refreshLiveLogs');
+  if (!stream || !statusChip) return;
+  const alertsOnly = {{ 'true' if is_alerts_view else 'false' }};
+  let lastSeq = 0; let timer = null; let loading = false;
+  function setStatus(text, mode){ statusChip.textContent = text; statusChip.classList.remove('ok', 'error'); if (mode === 'ok') statusChip.classList.add('ok'); if (mode === 'error') statusChip.classList.add('error'); }
+  function appendLine(entry){
+    const line = document.createElement('div'); line.className = 'act-terminal-line';
+    const stamp = document.createElement('span'); stamp.style.color = '#64748b'; stamp.textContent = `[${entry.timestamp || '--:--:--'}] `;
+    const level = (entry.level || 'info').toLowerCase(); const levelText = document.createElement('span'); levelText.style.fontWeight = '700'; levelText.style.color = level === 'error' ? '#fb7185' : level === 'warning' ? '#fbbf24' : level === 'success' ? '#34d399' : '#93c5fd'; levelText.textContent = `[${(entry.level || 'INFO').toUpperCase()}] `;
+    const ctx = document.createElement('span'); ctx.style.color = '#a5b4fc'; ctx.textContent = `[${entry.device_name || 'Sistema'}] `;
+    const msg = document.createElement('span'); msg.textContent = entry.message || '';
+    line.appendChild(stamp); line.appendChild(levelText); line.appendChild(ctx); line.appendChild(msg); stream.appendChild(line);
+    while (stream.childElementCount > 350) stream.removeChild(stream.firstChild);
+    stream.scrollTop = stream.scrollHeight;
+  }
+  async function pollLive(){
+    if (loading || document.hidden) return; loading = true; if (refreshBtn) refreshBtn.disabled = true;
+    try {
+      const res = await fetch(`{{ url_for('tenant_backups.global_backup_logs', tenant_slug=tenant.slug) }}?after=${lastSeq}`, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (Array.isArray(data.entries)) data.entries.forEach((entry) => { if (!alertsOnly) { appendLine(entry); return; } const lvl = (entry.level || '').toLowerCase(); const msg = (entry.message || '').toLowerCase(); if (lvl === 'warning' || lvl === 'error' || msg.includes('falha') || msg.includes('erro')) appendLine(entry); });
+      lastSeq = Number(data.last_seq || lastSeq || 0); setStatus('Conectado', 'ok');
+    } catch (_) { setStatus('Reconectando…', 'error'); } finally { loading = false; if (refreshBtn) refreshBtn.disabled = false; }
+  }
+  if (refreshBtn) refreshBtn.addEventListener('click', async () => { const icon = refreshBtn.querySelector('i'); if (icon) icon.classList.add('animate-spin'); await pollLive(); setTimeout(() => { if (icon) icon.classList.remove('animate-spin'); }, 320); });
+  pollLive(); timer = setInterval(pollLive, 5000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pollLive(); });
+  window.addEventListener('beforeunload', () => { if (timer) clearInterval(timer); });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,1205 @@
+{% extends "base_redesign.html" %}
+
+{% block title %}Dispositivos · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Dispositivos</b>{% endblock %}
+
+{# Mapeia variáveis legadas usadas pelo modal de backup ao vivo #}
+{% block head_pre %}
+  <style>:root,html.dark{--card-bg:var(--surface);--card-border:var(--line);--text-main:var(--ink);--text-muted:var(--ink-3);--bg-app:var(--bg);--line-color:var(--line)}</style>
+{% endblock %}
+
+{% block content %}
+{% set arg_q = request.args.get('q', '') %}
+{% set arg_connection = current_connection_filter or '' %}
+{% set arg_auto = current_auto_filter or '' %}
+{% set arg_result = current_result_filter or '' %}
+{% set arg_history = current_history_filter or '' %}
+{% set arg_audit = current_connection_audit_filter or '' %}
+{% set arg_due = current_due_filter or '' %}
+{% set arg_sort = current_sort or 'name_asc' %}
+{% set arg_compare = '1' if compare_mode else '' %}
+{% set arg_subgroup = current_subgroup_filter or '' %}
+{% set is_subgroup_selected = arg_subgroup and arg_subgroup != 'none' %}
+{% set has_any_filter = arg_q or current_group or arg_connection or arg_auto or arg_result or arg_history or arg_audit or arg_due or arg_subgroup %}
+{% set role = session.get('user_role') %}
+{% set can_manage_admin = role in ['super_admin', 'tenant_owner', 'tenant_admin'] %}
+{% set can_operator = role in ['super_admin', 'tenant_owner', 'tenant_admin', 'tenant_technician'] %}
+
+
+<style>
+  /* Devices list — Quiet Operations tokens */
+  .dev-page{margin:0;min-height:auto;background:transparent;color:var(--ink);padding:0}
+  .dev-wrap{max-width:1320px;margin:0 auto}
+  .dev-breadcrumb{display:flex;align-items:center;gap:.35rem;margin-bottom:.35rem;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
+  .dev-breadcrumb a{color:var(--ink-3);text-decoration:none}.dev-breadcrumb a:hover{color:var(--pine)}
+  .dev-head-main{display:flex;flex-direction:column;gap:1rem}
+  @media(min-width:768px){.dev-head-main{flex-direction:row;align-items:end;justify-content:space-between}}
+  .dev-head-title-row{display:flex;align-items:center;gap:.75rem}
+  .dev-head-icon{display:none;padding:.62rem;border-radius:13px;border:1px solid var(--line);background:var(--pine-soft)}
+  .dev-head-icon i{width:1.25rem;height:1.25rem;color:var(--pine)}
+  @media(min-width:640px){.dev-head-icon{display:inline-flex}}
+  .dev-title{margin:0;font-family:var(--serif);font-size:1.6rem;font-weight:500;color:var(--ink);letter-spacing:0}
+  .dev-subtitle{margin:.5rem 0 0;font-size:.88rem;color:var(--ink-2);max-width:50rem;line-height:1.55}
+  .dev-top-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem}
+  .dev-top-sep{width:1px;height:1.5rem;background:var(--line);margin:0 .2rem;display:none}
+  @media(min-width:640px){.dev-top-sep{display:block}}
+
+  .dev-filters{background:var(--surface);border:1px solid var(--line);border-radius:var(--r3);padding:18px 22px;box-shadow:var(--sh-1);margin-bottom:16px}
+  .dev-filter-row{display:flex;flex-direction:column;gap:1rem}
+  @media(min-width:1180px){.dev-filter-row{flex-direction:row;align-items:center;justify-content:space-between}}
+  .dev-search-wrap{position:relative;width:100%}
+  @media(min-width:1180px){.dev-search-wrap{min-width:300px;flex:1 1 360px}}
+  .dev-search-wrap i{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--pine);pointer-events:none;z-index:1}
+  .dev-input,.dev-select{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r1);color:var(--ink);font-size:13.5px;outline:none;transition:border-color .15s,box-shadow .15s;min-height:2.4rem;font-family:var(--sans)}
+  .dev-input{padding:.58rem .8rem .58rem 2.6rem}.dev-select{padding:.58rem .65rem}
+  .dev-input::placeholder{color:var(--ink-3)}
+  .dev-input:focus,.dev-select:focus{border-color:var(--pine);box-shadow:0 0 0 2px var(--pine-ring)}
+  .dev-selects{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}
+  @media(min-width:760px){.dev-selects{display:flex;flex-wrap:wrap;gap:.65rem;width:auto}.dev-select{width:auto;min-width:148px}}
+  .dev-select.compact{min-width:132px}
+
+  .dev-subgroups{margin-top:14px;border-top:1px solid var(--line);padding-top:12px;display:flex;align-items:center;gap:.35rem;overflow-x:auto;padding-bottom:.2rem}
+  .dev-subgroups-label{display:inline-flex;align-items:center;gap:.35rem;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-right:.45rem;white-space:nowrap}
+  .dev-subgroups-label i{width:.9rem;height:.9rem}
+  .dev-tab{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:500;color:var(--ink-2);text-decoration:none;transition:all .15s}
+  .dev-tab:hover{border-color:var(--line-2);color:var(--ink)}
+  .dev-tab.is-active,.dev-tab.active-gray{background:var(--pine-soft);border-color:var(--pine);color:var(--pine-deep);font-weight:600}
+  .dev-tab.active-indigo{background:var(--lilac-soft);border-color:var(--lilac);color:var(--lilac)}
+  .dev-tab.active-sky{background:var(--calm-blue-soft);border-color:var(--calm-blue);color:var(--calm-blue)}
+
+  .dev-bulk{border:1px solid var(--line);border-radius:var(--r2);background:var(--surface);padding:13px 22px;display:flex;align-items:center;justify-content:space-between;gap:.85rem;flex-wrap:wrap;margin-bottom:16px}
+  .dev-bulk-left{display:flex;align-items:center;gap:.7rem}
+  .dev-bulk-badge{font-size:12px;font-weight:600;border-radius:8px;padding:3px 10px;background:var(--pine-soft);color:var(--pine-deep);border:1px solid var(--pine)}
+  .dev-bulk-text{font-size:13.5px;color:var(--ink-2)}.dev-bulk-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+
+  .dev-floating-bulk{position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);z-index:100;width:min(92vw,760px);display:none;align-items:center;justify-content:space-between;gap:.8rem;border-radius:var(--r2);border:1px solid var(--line);background:var(--surface);padding:14px 18px;box-shadow:var(--sh-3)}
+  .dev-floating-bulk.is-visible{display:flex}
+  .dev-floating-bulk-label{font-size:14px;color:var(--ink)}.dev-floating-bulk-label strong{color:var(--pine)}
+
+  .dev-table-card{border:1px solid var(--line);border-radius:var(--r3);overflow:hidden;background:var(--surface);box-shadow:var(--sh-1)}
+  .dev-table-wrap{overflow-x:auto}
+  .dev-table{width:100%;border-collapse:collapse;min-width:1100px}
+  .dev-table thead th{border-bottom:1px solid var(--line);color:var(--ink-3);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:14px 16px;text-align:left;vertical-align:middle;background:transparent}
+  .dev-table tbody td{border-bottom:1px solid var(--line);padding:14px 16px;vertical-align:middle;color:var(--ink);font-size:13.5px}
+  .dev-row{border-left:2px solid transparent;transition:background .15s}
+  .dev-row:hover{background:var(--surface-2)}
+  .dev-row.is-failure{background:var(--crit-soft)}
+  .dev-row.is-selected{border-left-color:var(--pine);background:var(--pine-tint)}
+
+  .dev-name{font-weight:600;color:var(--ink);font-size:14px}
+  .dev-meta{margin-top:4px;font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
+  .dev-meta-subgroup{display:inline-flex;align-items:center;gap:.25rem;color:var(--lilac)}
+  .dev-pill{display:inline-flex;align-items:center;border-radius:7px;border:1px solid var(--line);background:var(--inset);color:var(--ink-2);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:4px 8px}
+  .dev-pill.huawei{border-color:var(--calm-blue-soft);background:var(--calm-blue-soft);color:var(--calm-blue)}
+  .dev-pill.mikrotik{border-color:var(--lilac-soft);background:var(--lilac-soft);color:var(--lilac)}
+
+  .dev-ip-wrap{display:flex;flex-direction:column;align-items:start;gap:.36rem}
+  .dev-ip-copy{display:inline-flex;align-items:center;gap:.38rem;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink-2);padding:5px 8px;font-size:11.5px;cursor:pointer;transition:all .15s;font-family:var(--mono)}
+  .dev-ip-copy:hover{border-color:var(--line-2);color:var(--ink)}
+  .dev-ip-copy .ip-main{color:var(--ink)}.dev-ip-copy .ip-port{color:var(--ink-3)}
+  .dev-ip-copy i,.dev-ip-copy svg{width:.75rem;height:.75rem;color:var(--ink-3);flex-shrink:0}
+  .dev-ip-copy.copied{border-color:var(--good);color:var(--good)}.dev-ip-copy.copied i{color:var(--good)}
+
+  .dev-lastbackup{display:inline-flex;align-items:center;gap:.4rem;font-size:12px;color:var(--ink);font-family:var(--mono)}
+  .dev-lastbackup i,.dev-lastbackup svg{width:.85rem;height:.85rem;color:var(--ink-3);flex-shrink:0}
+  .dev-status{display:inline-flex;align-items:center;gap:5px;border-radius:7px;border:1px solid var(--line);background:var(--inset);color:var(--ink-2);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:4px 8px}
+  .dev-status i,.dev-status svg{width:.8rem;height:.8rem;flex-shrink:0}
+  .dev-status.success{background:var(--good-soft);color:var(--good);border-color:var(--good-soft)}
+  .dev-status.fail{background:var(--crit-soft);color:var(--crit);border-color:var(--crit-soft)}
+  .dev-status-meta{margin-top:6px;display:flex;align-items:center;gap:.8rem;font-size:10.5px;font-weight:600;color:var(--ink-3)}
+  .dev-status-meta span{display:inline-flex;align-items:center;gap:4px}
+  .dev-status-meta i,.dev-status-meta svg{width:.72rem;height:.72rem;flex-shrink:0}
+  .dev-status-meta .on{color:var(--good)}.dev-status-meta .critical{color:var(--crit)}
+
+  .dev-actions{display:flex;justify-content:end;align-items:center;gap:4px;opacity:.4;transition:opacity .2s}
+  .dev-row:hover .dev-actions{opacity:1}
+  .dev-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink-3);transition:all .15s;cursor:pointer}
+  .dev-icon-btn i{width:1rem;height:1rem}
+  .dev-icon-btn:hover{border-color:var(--line-2);color:var(--ink);background:var(--surface-2)}
+  .dev-icon-btn.play:hover{color:var(--good);border-color:var(--good-soft);background:var(--good-soft)}
+  .dev-icon-btn.terminal:hover,.dev-icon-btn.collect:hover{color:var(--calm-blue);border-color:var(--calm-blue-soft);background:var(--calm-blue-soft)}
+  .dev-icon-btn.logs:hover{color:var(--lilac);border-color:var(--lilac-soft);background:var(--lilac-soft)}
+  .dev-icon-btn.danger:hover{color:var(--crit);border-color:var(--crit-soft);background:var(--crit-soft)}
+  .dev-icon-btn.diagnose:hover{color:var(--good);border-color:var(--good-soft);background:var(--good-soft)}
+  .dev-icon-sep{width:1px;height:1.2rem;background:var(--line);margin:0 .2rem}
+
+  .dev-pagination{border-top:1px solid var(--line);padding:14px 22px;display:flex;flex-direction:column;gap:.65rem;justify-content:space-between;align-items:center}
+  @media(min-width:640px){.dev-pagination{flex-direction:row}}
+  .dev-page-text{font-size:13px;color:var(--ink-3)}.dev-page-text strong{color:var(--ink);font-weight:600}
+  .dev-page-links{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .dev-page-btn{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink-2);font-size:12px;font-weight:500;padding:6px 12px;text-decoration:none;transition:all .15s}
+  .dev-page-btn:hover{border-color:var(--line-2);color:var(--ink)}
+  .dev-page-btn.active{background:var(--pine);color:#fff;border-color:var(--pine)}
+
+  .dev-empty{text-align:center;padding:3rem 1rem;color:var(--ink-3)}
+  .dev-empty i{width:2.5rem;height:2.5rem;color:var(--ink-3);margin:0 auto .8rem;display:block}
+  .dev-row-check{width:1rem;height:1rem;border-radius:.2rem;border:1px solid var(--line);accent-color:var(--pine)}
+
+  .dev-diag-modal{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;background:rgba(17,19,24,.6);backdrop-filter:blur(5px);padding:1rem}
+  .dev-diag-modal.is-open{display:flex}
+  .dev-diag-panel{width:min(900px,100%);max-height:88vh;border-radius:var(--r2);border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-3);overflow:hidden;display:flex;flex-direction:column}
+  .dev-diag-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:.8rem}
+  .dev-diag-body{padding:16px 20px;display:flex;flex-direction:column;gap:.8rem;min-height:0}
+  .dev-diag-output{min-height:220px;max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:var(--r1);background:var(--inset);color:var(--ink);font-size:12px;line-height:1.45;padding:16px;white-space:pre-wrap;font-family:var(--mono)}
+
+  @media(max-width:768px){
+    .dev-top-actions{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:.2rem}
+    .dev-top-actions>*{flex:0 0 auto}
+    .dev-selects{grid-template-columns:1fr}
+    .dev-bulk-left,.dev-bulk-actions{width:100%}
+    .dev-bulk-actions>*{flex:1 1 auto;justify-content:center}
+    .dev-floating-bulk{width:min(94vw,560px);flex-direction:column;align-items:stretch}
+    .dev-floating-bulk .dev-bulk-actions{width:100%}
+  }
+</style>
+
+
+<div class="wrap">
+    <div class="page-h head-row">
+      <div>
+        <div class="eyebrow">{% if current_group %}{{ current_group.name }} · {{ stats.total }} dispositivos{% else %}Inventário{% endif %}</div>
+        <h1>Dispositivos</h1>
+        <p>Equipamentos {% if current_group %}deste grupo{% else %}do tenant{% endif %}. Selecione itens para executar ações em lote, comparar versões ou cuidar primeiro dos que estão com pendência.</p>
+      </div>
+
+        <div class="actions">
+          {% if has_any_filter %}
+          <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, compare=arg_compare) }}" class="btn btn-ghost">
+            <i data-lucide="x-circle"></i>
+            Limpar filtros
+          </a>
+          {% endif %}
+
+          {% if current_group %}
+          <a href="{{ url_for('tenant_groups.list_groups', tenant_slug=tenant.slug) }}" class="btn btn-line">
+            <i data-lucide="arrow-left"></i>
+            Voltar
+          </a>
+          {% endif %}
+
+          {% if current_group %}
+          <button type="button" id="openSubgroupModal" class="btn btn-line">
+            <i data-lucide="folder-tree"></i>
+            Subgrupo
+          </button>
+          {% if is_subgroup_selected %}
+          <button type="button" id="openEditSubgroupModal" class="btn btn-line">
+            <i data-lucide="settings-2"></i>
+            Editar Subgrupo
+          </button>
+          {% endif %}
+          {% endif %}
+
+          <a href="{{ url_for('tenant_devices.add_device', tenant_slug=tenant.slug) }}" class="btn btn-pine">
+            <i data-lucide="plus"></i>
+            Novo dispositivo
+          </a>
+        </div>
+    </div>
+
+    {# Summary strip — sistema_2 #}
+    <div class="panel summary" style="margin-bottom:22px">
+      <div class="sm"><div class="n">{{ stats.total }}</div><div class="l">total</div></div>
+      <div class="sm"><div class="n" style="color:var(--good)">{{ stats.online }}</div><div class="l">em dia</div></div>
+      <div class="sm"><div class="n" style="color:var(--care)">{{ stats.with_issues }}</div><div class="l">pendências</div></div>
+      <div class="sm"><div class="n" style="color:var(--ink-3)">{{ stats.without_history }}</div><div class="l">nunca executado</div></div>
+      <div class="sm"><div class="n" style="color:var(--pine)">{{ stats.scheduled }}</div><div class="l">auto-backup ativo</div></div>
+    </div>
+
+    {% if compare_mode %}
+    <div class="panel" style="padding:12px 16px;margin-bottom:16px;color:var(--pine-deep);background:var(--pine-soft);border-color:var(--pine)">
+      Modo comparacao ativo: escolha o dispositivo e use a acao de comparar.
+    </div>
+    {% endif %}
+
+    <section class="dev-filters">
+      <form action="" method="GET" class="dev-filter-row">
+        {% if compare_mode %}
+        <input type="hidden" name="compare" value="1">
+        {% endif %}
+        {% if current_group %}
+        <input type="hidden" name="group_id" value="{{ current_group.id }}">
+        {% endif %}
+        {% if arg_subgroup %}
+        <input type="hidden" name="subgroup" value="{{ arg_subgroup }}">
+        {% endif %}
+        {% if arg_history %}<input type="hidden" name="history" value="{{ arg_history }}">{% endif %}
+        {% if arg_audit %}<input type="hidden" name="audit" value="{{ arg_audit }}">{% endif %}
+        {% if arg_due %}<input type="hidden" name="due" value="{{ arg_due }}">{% endif %}
+        <input type="hidden" name="sort" value="{{ arg_sort }}">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+
+        <div class="dev-search-wrap">
+          <i data-lucide="search"></i>
+          <input class="dev-input" type="text" name="q" value="{{ arg_q }}" placeholder="Buscar nome, IP, grupo, tipo, modelo...">
+        </div>
+
+        <div class="dev-selects">
+          <select name="connection" class="dev-select compact">
+            <option value="">Acesso: Todos</option>
+            <option value="direct" {% if arg_connection == 'direct' %}selected{% endif %}>Direto</option>
+            <option value="vpn" {% if arg_connection == 'vpn' %}selected{% endif %}>VPN</option>
+            <option value="jump" {% if arg_connection in ['jump', 'jump_host'] %}selected{% endif %}>Jump Host</option>
+            <option value="online" {% if arg_connection == 'online' %}selected{% endif %}>Online</option>
+            <option value="offline" {% if arg_connection == 'offline' %}selected{% endif %}>Offline/erro</option>
+            <option value="unknown" {% if arg_connection == 'unknown' %}selected{% endif %}>Nao monitorado</option>
+          </select>
+
+          <select name="auto" class="dev-select compact">
+            <option value="">Auto: Todos</option>
+            <option value="enabled" {% if arg_auto == 'enabled' %}selected{% endif %}>Ativado</option>
+            <option value="disabled" {% if arg_auto == 'disabled' %}selected{% endif %}>Desativado</option>
+          </select>
+
+          <select name="result" class="dev-select compact">
+            <option value="">Resultado: Todos</option>
+            <option value="success" {% if arg_result == 'success' %}selected{% endif %}>Sucesso</option>
+            <option value="failed" {% if arg_result == 'failed' %}selected{% endif %}>Falha</option>
+            <option value="never" {% if arg_result == 'never' %}selected{% endif %}>Nunca executado</option>
+          </select>
+
+          <button type="submit" class="btn btn-soft" style="min-width:104px;">
+            <i data-lucide="check"></i>
+            Aplicar
+          </button>
+        </div>
+      </form>
+
+      {% if current_group %}
+      <div class="dev-subgroups">
+        <span class="dev-subgroups-label">
+          <i data-lucide="folder-tree"></i>
+          Organizacao Interna:
+        </span>
+
+        <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, q=arg_q, group_id=current_group.id, connection=arg_connection, auto=arg_auto, result=arg_result, history=arg_history, audit=arg_audit, due=arg_due, sort=arg_sort, per_page=per_page, compare=arg_compare) }}"
+           class="dev-tab {% if not arg_subgroup %}is-active active-gray{% endif %}">Todos ({{ subgroup_total_count }})</a>
+
+        {% for row in group_subgroups %}
+        {% if row and row.subgroup %}
+        {% set is_active_subgroup = arg_subgroup == (row.subgroup.id|string) %}
+        {% set subgroup_mode = (row.subgroup.connection_type or 'direct') %}
+        <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, q=arg_q, group_id=current_group.id, subgroup=row.subgroup.id, connection=arg_connection, auto=arg_auto, result=arg_result, history=arg_history, audit=arg_audit, due=arg_due, sort=arg_sort, per_page=per_page, compare=arg_compare) }}"
+           data-subgroup-chip="1"
+           data-active="{{ '1' if is_active_subgroup else '0' }}"
+           data-subgroup-id="{{ row.subgroup.id }}"
+           data-subgroup-name="{{ row.subgroup.name }}"
+           data-subgroup-connection="{{ subgroup_mode }}"
+           class="dev-tab {% if is_active_subgroup %}{% if subgroup_mode == 'vpn' %}is-active active-indigo{% elif subgroup_mode in ['jump_host', 'jump'] %}is-active active-sky{% else %}is-active active-gray{% endif %}{% endif %}">
+          {{ row.subgroup.name }} ({{ row.device_count }})
+        </a>
+        {% endif %}
+        {% endfor %}
+
+        <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, q=arg_q, group_id=current_group.id, subgroup='none', connection=arg_connection, auto=arg_auto, result=arg_result, history=arg_history, audit=arg_audit, due=arg_due, sort=arg_sort, per_page=per_page, compare=arg_compare) }}"
+           class="dev-tab {% if arg_subgroup == 'none' %}is-active active-gray{% endif %}">Sem Subgrupo ({{ subgroup_none_count }})</a>
+      </div>
+      {% endif %}
+    </section>
+
+    <form id="bulkForm" action="{{ url_for('tenant_devices.run_backup_selected', tenant_slug=tenant.slug) }}" method="POST">
+      {% include 'partials/csrf.html' %}
+      {% if current_group %}<input type="hidden" name="group_id" value="{{ current_group.id }}">{% endif %}
+      {% if arg_subgroup %}<input type="hidden" name="subgroup" value="{{ arg_subgroup }}">{% endif %}
+
+      <div class="dev-bulk">
+        <div class="dev-bulk-left">
+          <input type="checkbox" id="selectAll" class="dev-row-check">
+          <span class="dev-bulk-text">Selecionar Todos</span>
+          <span id="selectedCount" class="dev-bulk-badge">0 selecionados</span>
+        </div>
+
+        <div class="dev-bulk-actions">
+          <button type="button" id="bulkSubmitTrigger" data-run-backup-live data-form-id="bulkForm" class="btn btn-soft btn-sm">
+            <i data-lucide="play"></i>
+            Backup Selecionados
+          </button>
+          <button type="button" data-run-backup-live data-form-id="form-backup-all" class="btn btn-line btn-sm">
+            <i data-lucide="layers"></i>
+            Backup Todos ({{ stats.total if current_group else stats.scheduled }})
+          </button>
+        </div>
+      </div>
+
+      <div id="bulkActionBar" class="dev-floating-bulk">
+        <div class="dev-floating-bulk-label"><strong id="bulkActionLabel">0 dispositivos selecionados</strong> · Acoes em lote</div>
+        <div class="dev-bulk-actions">
+          <button type="button" id="bulkActionClear" class="btn btn-ghost btn-sm">Limpar selecao</button>
+          <button type="button" id="bulkActionRun" class="btn btn-pine btn-sm">Backup Agora</button>
+        </div>
+      </div>
+
+      <section class="dev-table-card">
+        <div class="dev-table-wrap">
+          <table class="dev-table">
+            <thead>
+              <tr>
+                <th style="width:48px;text-align:center;"><button type="button" id="toggleAllBtn" class="dev-icon-btn" style="margin:0 auto;"><i data-lucide="square"></i></button></th>
+                <th class="col-name">Dispositivo e organização</th>
+                <th class="col-md">Tipo</th>
+                <th class="col-md">Endereço</th>
+                <th class="col-lg shrink">Último backup</th>
+                <th>Estado operacional</th>
+                <th style="text-align:right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if devices %}
+              {% for device in devices %}
+              {% set row_state = 'critical' if device.last_backup_status == 'failure' else ('attention' if (device.last_connection_status in ['offline', 'error'] or not device.backup_scheduled) else 'normal') %}
+              {% set is_failed = device.last_backup_status == 'failure' %}
+              {% set type_name = device.type.name if device.type else 'Nao definido' %}
+              {% set type_name_lc = type_name|lower %}
+              <tr class="dev-row {% if is_failed %}is-failure{% endif %}" data-row-device-id="{{ device.id }}">
+                <td style="text-align:center;">
+                  <input type="checkbox" name="device_ids" value="{{ device.id }}" form="bulkForm" data-device-type-id="{{ device.device_type_id or '' }}" class="dev-row-check row-checkbox">
+                </td>
+
+                <td>
+                  <div class="dev-name">{{ device.name }}</div>
+                  <div class="dev-meta">
+                    {{ device.group.name if device.group else 'Sem grupo' }}
+                    {% if device.subgroup and device.subgroup.is_active %}
+                    <span>"</span>
+                    <span class="dev-meta-subgroup">
+                      <i data-lucide="folder-tree" class="w-3 h-3"></i>
+                      {{ device.subgroup.name }}
+                    </span>
+                    {% endif %}
+                  </div>
+                </td>
+
+                <td>
+                  <span class="dev-pill {% if 'huawei' in type_name_lc %}huawei{% elif 'mikrotik' in type_name_lc %}mikrotik{% endif %}">{{ type_name }}</span>
+                </td>
+
+                <td>
+                  <div class="dev-ip-wrap">
+                    <button type="button" class="dev-ip-copy" data-copy-ip="{{ device.ip_address }}" data-copy-port="{{ device.port }}" data-copy-id="{{ device.id }}">
+                      <span class="ip-main">{{ device.ip_address }}</span>
+                      <span class="ip-port">:{{ device.port }}</span>
+                      <i data-lucide="copy" class="copy-icon"></i>
+                    </button>
+                  </div>
+                </td>
+
+                <td>
+                  {% if device.last_backup_at %}
+                  <span class="dev-lastbackup">
+                    <i data-lucide="activity"></i>
+                    {{ (device.last_backup_at|localtime).strftime('%Y-%m-%d %H:%M') }}
+                  </span>
+                  {% else %}
+                  <span class="dev-lastbackup" style="color:var(--text-muted);">Nunca</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if device.last_backup_status == 'success' %}
+                  <span class="dev-status success"><i data-lucide="check-circle-2"></i>Sucesso</span>
+                  {% elif device.last_backup_status == 'failure' %}
+                  <span class="dev-status fail"><i data-lucide="x-circle"></i>Falha</span>
+                  {% elif not device.last_backup_at %}
+                  <span class="dev-status"><i data-lucide="clock-3"></i>Nunca executado</span>
+                  {% else %}
+                  <span class="dev-status"><i data-lucide="help-circle"></i>Desconhecido</span>
+                  {% endif %}
+
+                  <div class="dev-status-meta">
+                    <span class="{% if device.backup_scheduled %}on{% endif %}">
+                      <i data-lucide="refresh-cw"></i>
+                      {{ 'ON' if device.backup_scheduled else 'OFF' }}
+                    </span>
+                    <span class="{% if row_state == 'critical' %}critical{% endif %}">
+                      <i data-lucide="flag"></i>
+                      {{ 'Critica' if row_state == 'critical' else 'Normal' }}
+                    </span>
+                  </div>
+                </td>
+
+                <td style="text-align:right;">
+                  <div class="dev-actions">
+                    <button type="button" data-run-backup-live data-form-id="form-backup-{{ device.id }}" class="dev-icon-btn play" title="Backup Manual">
+                      <i data-lucide="play"></i>
+                    </button>
+
+                    <a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id, group_id=current_group.id if current_group else None) }}" class="dev-icon-btn terminal" title="Ver detalhes do dispositivo">
+                      <i data-lucide="info"></i>
+                    </a>
+
+                    <a href="{{ url_for('tenant_compare.compare_backups', tenant_slug=tenant.slug, device_id=device.id) }}" class="dev-icon-btn logs" title="Comparar versoes de backup">
+                      <i data-lucide="git-compare"></i>
+                    </a>
+
+                    <span class="dev-icon-sep"></span>
+
+                    <a href="{{ url_for('tenant_devices.edit_device', tenant_slug=tenant.slug, device_id=device.id, group_id=current_group.id if current_group else None) }}" class="dev-icon-btn" title="Editar">
+                      <i data-lucide="settings"></i>
+                    </a>
+
+                    {% if can_manage_admin %}
+                    <button type="submit"
+                            form="form-delete-{{ device.id }}"
+                            class="dev-icon-btn danger"
+                            title="Apagar dispositivo"
+                            onclick="return confirm('Apagar o dispositivo {{ device.name }}? Ele sera removido da lista, mas o historico permanece preservado.');">
+                      <i data-lucide="trash-2"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+              {% else %}
+              <tr>
+                <td colspan="7" class="dev-empty">
+                  <i data-lucide="inbox"></i>
+                  <p>Nenhum dispositivo encontrado.</p>
+                  <div style="margin-top:1rem;">
+                    <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-line btn-sm">Limpar filtros</a>
+                  </div>
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="dev-pagination">
+          <span class="dev-page-text">Mostrando <strong>{{ start_idx }}-{{ end_idx }}</strong> de <strong>{{ stats.total }}</strong> dispositivos</span>
+          <div class="dev-page-links">
+            {% if page > 1 %}
+            <a class="dev-page-btn" href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, page=page-1, q=arg_q, group_id=current_group.id if current_group else None, subgroup=arg_subgroup or None, connection=arg_connection, auto=arg_auto, result=arg_result, history=arg_history, audit=arg_audit, due=arg_due, sort=arg_sort, per_page=per_page, compare=arg_compare) }}">Anterior</a>
+            {% else %}
+            <span class="dev-page-btn" style="opacity:.5;cursor:not-allowed;">Anterior</span>
+            {% endif %}
+
+            {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="dev-page-btn active">{{ p }}</span>
+            {% else %}
+            <a class="dev-page-btn" href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, page=p, q=arg_q, group_id=current_group.id if current_group else None, subgroup=arg_subgroup or None, connection=arg_connection, auto=arg_auto, result=arg_result, history=arg_history, audit=arg_audit, due=arg_due, sort=arg_sort, per_page=per_page, compare=arg_compare) }}">{{ p }}</a>
+            {% endif %}
+            {% endfor %}
+
+            {% if page < total_pages %}
+            <a class="dev-page-btn" href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, page=page+1, q=arg_q, group_id=current_group.id if current_group else None, subgroup=arg_subgroup or None, connection=arg_connection, auto=arg_auto, result=arg_result, history=arg_history, audit=arg_audit, due=arg_due, sort=arg_sort, per_page=per_page, compare=arg_compare) }}">Proximo</a>
+            {% else %}
+            <span class="dev-page-btn" style="opacity:.5;cursor:not-allowed;">Proximo</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </section>
+    </form>
+
+    {% for device in devices %}
+    <form id="form-backup-{{ device.id }}" action="{{ url_for('tenant_devices.run_backup', tenant_slug=tenant.slug, device_id=device.id) }}" method="POST" class="hidden">
+      {% include 'partials/csrf.html' %}
+      {% if current_group %}<input type="hidden" name="group_id" value="{{ current_group.id }}">{% endif %}
+    </form>
+
+    {% if can_manage_admin %}
+    <form id="form-delete-{{ device.id }}" action="{{ url_for('tenant_devices.delete_device', tenant_slug=tenant.slug, device_id=device.id, group_id=current_group.id if current_group else None) }}" method="POST" class="hidden">
+      {% include 'partials/csrf.html' %}
+      {% if current_group %}<input type="hidden" name="return_group_id" value="{{ current_group.id }}">{% endif %}
+    </form>
+    {% endif %}
+
+    {% endfor %}
+
+    <form id="form-backup-all" action="{{ url_for('tenant_devices.run_backup_all', tenant_slug=tenant.slug) }}" method="POST" class="hidden"
+          onsubmit="return confirm('Executar backup para todos os dispositivos deste filtro?')">
+      {% include 'partials/csrf.html' %}
+      <input type="hidden" name="include_unvalidated" value="1">
+      {% if current_group %}
+      <input type="hidden" name="include_unscheduled" value="1">
+      <input type="hidden" name="group_id" value="{{ current_group.id }}">
+      {% endif %}
+      {% if arg_subgroup %}
+      <input type="hidden" name="subgroup" value="{{ arg_subgroup }}">
+      {% endif %}
+    </form>
+
+    <form id="form-subgroup-connection" action="{{ url_for('tenant_devices.bulk_subgroup_connection', tenant_slug=tenant.slug) }}" method="POST" class="hidden">
+      {% include 'partials/csrf.html' %}
+      {% if current_group %}
+      <input type="hidden" name="group_id" value="{{ current_group.id }}">
+      {% endif %}
+      <input type="hidden" id="subgroupActionInput" name="subgroup_action" value="create">
+      <input type="hidden" id="subgroupIdInput" name="subgroup_id" value="">
+      <input type="hidden" id="subgroupConnectionTypeInput" name="subgroup_connection_type" value="vpn">
+      <input type="hidden" id="subgroupNameInputHidden" name="subgroup_name" value="">
+      {% if arg_subgroup %}
+      <input type="hidden" name="subgroup" value="{{ arg_subgroup }}">
+      {% endif %}
+    </form>
+
+    {% if current_group %}
+    <div id="subgroupModal" aria-hidden="true"
+        onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex');this.setAttribute('aria-hidden','true');}"
+        class="bc-modal hidden">
+        <div class="bc-modal-panel">
+            <div class="bc-modal-head">
+                <div>
+                    <h3 id="subgroupModalTitle" class="bc-modal-title">
+                        <i data-lucide="folder-tree"></i>
+                        Criar subgrupo
+                    </h3>
+                    <p id="subgroupModalSubtitle" class="bc-modal-sub">Grupo principal: {{ current_group.name }}</p>
+                </div>
+                <button type="button" id="closeSubgroupModal"
+                    onclick="(function(){var m=document.getElementById('subgroupModal');if(m){m.classList.add('hidden');m.classList.remove('flex');m.setAttribute('aria-hidden','true');}})()"
+                    class="act" title="Fechar">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+
+            <div class="bc-modal-body">
+                <div class="modal-grid" style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--line)">
+                    <div>
+                        <label class="lbl">Nome do subgrupo</label>
+                        <input id="subgroupNameInput"
+                            type="text"
+                            maxlength="150"
+                            placeholder="Ex: OLT Remotas, Jump Secundário, VPN Legado"
+                            class="inp" />
+                    </div>
+                    <div>
+                        <label class="lbl">Modo de conexão</label>
+                        <select id="subgroupConnectionModeInput"
+                            class="inp">
+                            <option value="vpn">VPN</option>
+                            <option value="jump_host">Jump Host</option>
+                            <option value="direct">Direto</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="row btw ic wr g3" style="margin-bottom:10px">
+                        <div>
+                            <div style="font-weight:600;font-size:14px">Dispositivos a mover</div>
+                            <p class="faint" style="font-size:12.5px;margin:2px 0 0">Selecione os dispositivos do grupo principal para este subgrupo.</p>
+                        </div>
+                        <span id="subgroupSelectedCountPill"
+                            class="tag tag-pine">
+                            0 selecionados
+                        </span>
+                    </div>
+                    <p class="faint" style="font-size:12px;margin:0 0 10px">
+                        {{ group_devices_for_subgroup|length }} dispositivo(s) disponível(is) neste grupo.
+                    </p>
+
+                    <div class="device-pick-list">
+                        <div class="device-pick-toolbar">
+                            <div class="field" style="flex:1;min-width:180px">
+                                <i data-lucide="search"></i>
+                                <input id="subgroupDeviceSearch"
+                                    type="text"
+                                    placeholder="Filtrar dispositivos na lista..." />
+                            </div>
+                            <label class="row ic g2" style="font-size:12.5px;color:var(--ink-2);white-space:nowrap">
+                                <input type="checkbox" id="subgroupSelectAllVisible" style="accent-color:var(--pine);width:16px;height:16px">
+                                Selecionar visíveis
+                            </label>
+                        </div>
+                        <div class="device-pick-scroll">
+                            {% for d in group_devices_for_subgroup %}
+                            <label class="subgroup-device-row"
+                                data-name="{{ (d.name or '')|lower }}"
+                                data-ip="{{ (d.ip_address or '')|lower }}"
+                                data-current-subgroup-id="{{ d.subgroup_id if d.subgroup_id else '' }}">
+                                <input type="checkbox" class="subgroup-device-checkbox" value="{{ d.id }}">
+                                <span class="subgroup-device-main">
+                                    <span class="subgroup-device-name">{{ d.name }}</span>
+                                    <span class="subgroup-device-meta">
+                                        {{ d.ip_address }}:{{ d.port }}
+                                        {% if d.type %} · {{ d.type.name }}{% endif %}
+                                        {% if d.subgroup and d.subgroup.is_active %} · Atual: {{ d.subgroup.name }}{% endif %}
+                                    </span>
+                                </span>
+                            </label>
+                            {% else %}
+                            <div class="faint" style="padding:12px;font-size:12.5px">Nenhum dispositivo no grupo.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bc-modal-foot">
+                <div class="row ic g2 wr">
+                    <button type="button" id="deleteSubgroupBtn"
+                        class="hidden btn btn-line" style="border-color:var(--crit);color:var(--crit)">
+                        <i data-lucide="trash-2"></i>
+                        Excluir subgrupo
+                    </button>
+                    <button type="button" id="cancelSubgroupModalFooter"
+                        class="btn btn-ghost">
+                        Cancelar
+                    </button>
+                </div>
+                <button type="button" id="createSubgroupAndAssign"
+                    class="btn btn-pine">
+                    <span id="createSubgroupAndAssignLabel" class="row ic g2">
+                        <i data-lucide="folder-tree"></i>
+                        Salvar e mover selecionados
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{% include 'partials/backup_live_modal.html' %}
+
+<div id="deviceDiagnosticModal" class="dev-diag-modal" aria-hidden="true">
+  <div class="dev-diag-panel">
+    <div class="dev-diag-head">
+      <div>
+        <h3 id="deviceDiagnosticTitle" style="margin:0;color:var(--text-main);font-size:1rem;font-weight:800;">Diagnostico remoto</h3>
+        <p id="deviceDiagnosticSubtitle" style="margin:.28rem 0 0;color:var(--text-muted);font-size:12px;">Coleta operacional via Jump Host sem expor credenciais.</p>
+      </div>
+      <button type="button" id="deviceDiagnosticClose" class="btn btn-ghost btn-sm">Fechar</button>
+    </div>
+    <div class="dev-diag-body">
+      <div class="dev-bulk-actions">
+        <button type="button" id="deviceDiagnosticRunAgain" class="btn btn-soft btn-sm">
+          <i data-lucide="refresh-cw"></i>
+          Recoletar
+        </button>
+        <button type="button" id="deviceDiagnosticCopy" class="btn btn-line btn-sm">
+          <i data-lucide="copy"></i>
+          Copiar saida
+        </button>
+      </div>
+      <pre id="deviceDiagnosticOutput" class="dev-diag-output">Aguardando coleta...</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        lucide.createIcons();
+        const currentGroupName = {{ (current_group.name if current_group else '')|tojson }};
+
+        // Select All Logic
+        const selectAll = document.getElementById('selectAll');
+        const toggleAllBtn = document.getElementById('toggleAllBtn');
+        const rowChecks = document.querySelectorAll('.row-checkbox');
+        const ipCopyButtons = document.querySelectorAll('.dev-ip-copy');
+        const selectedCount = document.getElementById('selectedCount');
+        const bulkActionBar = document.getElementById('bulkActionBar');
+        const bulkActionLabel = document.getElementById('bulkActionLabel');
+        const bulkActionRun = document.getElementById('bulkActionRun');
+        const bulkActionClear = document.getElementById('bulkActionClear');
+        const openSubgroupModal = document.getElementById('openSubgroupModal');
+        const openEditSubgroupModal = document.getElementById('openEditSubgroupModal');
+        const closeSubgroupModal = document.getElementById('closeSubgroupModal');
+        const subgroupModal = document.getElementById('subgroupModal');
+        const subgroupModalTitle = document.getElementById('subgroupModalTitle');
+        const subgroupModalSubtitle = document.getElementById('subgroupModalSubtitle');
+        const subgroupConnectionModeInput = document.getElementById('subgroupConnectionModeInput');
+        const subgroupNameInput = document.getElementById('subgroupNameInput');
+        const subgroupDeviceSearch = document.getElementById('subgroupDeviceSearch');
+        const subgroupSelectAllVisible = document.getElementById('subgroupSelectAllVisible');
+        const subgroupSelectedCountPill = document.getElementById('subgroupSelectedCountPill');
+        const subgroupDeviceRows = document.querySelectorAll('.subgroup-device-row');
+        const subgroupDeviceCheckboxes = document.querySelectorAll('.subgroup-device-checkbox');
+        const createSubgroupAndAssign = document.getElementById('createSubgroupAndAssign');
+        const deleteSubgroupBtn = document.getElementById('deleteSubgroupBtn');
+        const cancelSubgroupModalFooter = document.getElementById('cancelSubgroupModalFooter');
+        const bulkForm = document.getElementById('bulkForm');
+        const bulkSubmitTrigger = document.getElementById('bulkSubmitTrigger');
+        const subgroupForm = document.getElementById('form-subgroup-connection');
+        const subgroupActionInput = document.getElementById('subgroupActionInput');
+        const subgroupIdInput = document.getElementById('subgroupIdInput');
+        const subgroupConnectionTypeInput = document.getElementById('subgroupConnectionTypeInput');
+        const subgroupNameInputHidden = document.getElementById('subgroupNameInputHidden');
+        const createSubgroupAndAssignLabel = document.getElementById('createSubgroupAndAssignLabel');
+        const activeSubgroupChip = document.querySelector('[data-subgroup-chip="1"][data-active="1"]');
+        const csrfTokenInput = document.querySelector('input[name="_csrf_token"]');
+        const collectButtons = document.querySelectorAll('[data-collect-diagnostics]');
+        const deviceDiagnosticModal = document.getElementById('deviceDiagnosticModal');
+        const deviceDiagnosticClose = document.getElementById('deviceDiagnosticClose');
+        const deviceDiagnosticRunAgain = document.getElementById('deviceDiagnosticRunAgain');
+        const deviceDiagnosticCopy = document.getElementById('deviceDiagnosticCopy');
+        const deviceDiagnosticOutput = document.getElementById('deviceDiagnosticOutput');
+        const deviceDiagnosticTitle = document.getElementById('deviceDiagnosticTitle');
+        const deviceDiagnosticSubtitle = document.getElementById('deviceDiagnosticSubtitle');
+        let lastCollectContext = null;
+        let subgroupModalMode = 'create';
+
+        async function postCollectDiagnostics(url, payload) {
+            const body = new URLSearchParams();
+            Object.entries(payload || {}).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    body.append(key, value);
+                }
+            });
+            if (csrfTokenInput && csrfTokenInput.value) {
+                body.append('_csrf_token', csrfTokenInput.value);
+            }
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRF-Token': csrfTokenInput?.value || '',
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+                },
+                body: body.toString()
+            });
+            return response.json();
+        }
+
+        function openDeviceDiagnosticModal() {
+            if (!deviceDiagnosticModal) return;
+            deviceDiagnosticModal.classList.add('is-open');
+            deviceDiagnosticModal.setAttribute('aria-hidden', 'false');
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        }
+
+        function closeDeviceDiagnosticModal() {
+            if (!deviceDiagnosticModal) return;
+            deviceDiagnosticModal.classList.remove('is-open');
+            deviceDiagnosticModal.setAttribute('aria-hidden', 'true');
+        }
+
+        async function runDeviceCollect(context) {
+            if (!context || !context.url || !deviceDiagnosticOutput) return;
+            lastCollectContext = context;
+            deviceDiagnosticOutput.textContent = 'Coletando diagnostico remoto...';
+            if (deviceDiagnosticTitle) {
+                deviceDiagnosticTitle.textContent = `Diagnostico remoto • ${context.deviceName || 'Dispositivo'}`;
+            }
+            if (deviceDiagnosticSubtitle) {
+                deviceDiagnosticSubtitle.textContent = `${context.deviceIp || '-'} • via Jump Host do grupo`;
+            }
+            openDeviceDiagnosticModal();
+            try {
+                const payload = await postCollectDiagnostics(context.url, { device_id: context.deviceId });
+                deviceDiagnosticOutput.textContent = payload.summary || payload.error || 'Sem retorno da coleta.';
+            } catch (error) {
+                deviceDiagnosticOutput.textContent = 'Falha ao coletar diagnostico remoto para este dispositivo.';
+            }
+        }
+
+        collectButtons.forEach((btn) => {
+            btn.addEventListener('click', () => {
+                runDeviceCollect({
+                    url: btn.dataset.collectUrl || '',
+                    deviceId: btn.dataset.deviceId || '',
+                    deviceName: btn.dataset.deviceName || '',
+                    deviceIp: btn.dataset.deviceIp || '',
+                });
+            });
+        });
+
+        if (deviceDiagnosticClose) {
+            deviceDiagnosticClose.addEventListener('click', closeDeviceDiagnosticModal);
+        }
+        if (deviceDiagnosticModal) {
+            deviceDiagnosticModal.addEventListener('click', (event) => {
+                if (event.target === deviceDiagnosticModal) {
+                    closeDeviceDiagnosticModal();
+                }
+            });
+        }
+        if (deviceDiagnosticRunAgain) {
+            deviceDiagnosticRunAgain.addEventListener('click', () => {
+                if (lastCollectContext) runDeviceCollect(lastCollectContext);
+            });
+        }
+        if (deviceDiagnosticCopy && deviceDiagnosticOutput) {
+            deviceDiagnosticCopy.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(deviceDiagnosticOutput.textContent || '');
+                } catch (error) {
+                    console.error('Falha ao copiar diagnostico', error);
+                }
+            });
+        }
+
+        function refreshSelectedCount() {
+            const checked = [...rowChecks].filter(cb => cb.checked).length;
+            const allChecked = rowChecks.length > 0 && checked === rowChecks.length;
+
+            if (selectedCount) {
+                selectedCount.textContent = `${checked} selecionados`;
+            }
+            if (bulkActionLabel) {
+                bulkActionLabel.textContent = `${checked} dispositivos selecionados`;
+            }
+            if (bulkActionBar) {
+                bulkActionBar.classList.toggle('is-visible', checked > 0);
+            }
+            if (selectAll) {
+                selectAll.checked = allChecked;
+            }
+            rowChecks.forEach((cb) => {
+                const row = cb.closest('tr');
+                if (row) row.classList.toggle('is-selected', cb.checked);
+            });
+            if (toggleAllBtn) {
+                toggleAllBtn.innerHTML = allChecked ? '<i data-lucide="check-square"></i>' : '<i data-lucide="square"></i>';
+                lucide.createIcons();
+            }
+        }
+
+        if (selectAll) {
+            selectAll.addEventListener('change', (e) => {
+                rowChecks.forEach(cb => cb.checked = e.target.checked);
+                refreshSelectedCount();
+            });
+        }
+        if (toggleAllBtn) {
+            toggleAllBtn.addEventListener('click', () => {
+                const allChecked = rowChecks.length > 0 && [...rowChecks].every((cb) => cb.checked);
+                rowChecks.forEach((cb) => { cb.checked = !allChecked; });
+                if (selectAll) selectAll.checked = !allChecked;
+                refreshSelectedCount();
+            });
+        }
+
+        rowChecks.forEach(cb => cb.addEventListener('change', refreshSelectedCount));
+        refreshSelectedCount();
+
+        ipCopyButtons.forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const ip = btn.dataset.copyIp || '';
+                if (!ip) return;
+                try {
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(ip);
+                    } else {
+                        const ta = document.createElement('textarea');
+                        ta.value = ip;
+                        ta.style.position = 'fixed';
+                        ta.style.left = '-9999px';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                    }
+                    btn.classList.add('copied');
+                    btn.innerHTML = `
+                        <span class="ip-main">${ip}</span>
+                        <span class="ip-port"></span>
+                        <i data-lucide="check"></i>
+                    `;
+                    lucide.createIcons();
+                    setTimeout(() => {
+                        const portText = btn.dataset.copyPort || '';
+                        btn.classList.remove('copied');
+                        btn.innerHTML = `
+                            <span class="ip-main">${ip}</span>
+                            <span class="ip-port">${portText ? ':' + portText : ''}</span>
+                            <i data-lucide="copy" class="copy-icon"></i>
+                        `;
+                        lucide.createIcons();
+                    }, 1400);
+                } catch (err) {
+                    console.error('Falha ao copiar IP', err);
+                }
+            });
+        });
+
+        function collectModalSelectedIds() {
+            return [...subgroupDeviceCheckboxes]
+                .filter((cb) => cb.checked)
+                .map((cb) => cb.value);
+        }
+
+        function refreshSubgroupModalState() {
+            const selected = collectModalSelectedIds();
+            const selectedCount = selected.length;
+            const subgroupNameValue = (subgroupNameInput && subgroupNameInput.value ? subgroupNameInput.value.trim() : '');
+            const canSave = subgroupModalMode === 'edit'
+                ? subgroupNameValue.length >= 3
+                : (selectedCount > 0 && subgroupNameValue.length >= 3);
+            if (subgroupSelectedCountPill) {
+                subgroupSelectedCountPill.textContent = `${selectedCount} selecionados`;
+            }
+            if (createSubgroupAndAssign) {
+                createSubgroupAndAssign.disabled = !canSave;
+            }
+        }
+
+        function applyModalSearch() {
+            const term = String((subgroupDeviceSearch && subgroupDeviceSearch.value) || '').toLowerCase().trim();
+            let visibleCount = 0;
+            subgroupDeviceRows.forEach((row) => {
+                const name = String(row.dataset.name || '');
+                const ip = String(row.dataset.ip || '');
+                const visible = !term || name.includes(term) || ip.includes(term);
+                row.classList.toggle('hidden', !visible);
+                if (visible) visibleCount += 1;
+            });
+            if (subgroupSelectAllVisible && visibleCount === 0) {
+                subgroupSelectAllVisible.checked = false;
+            }
+        }
+
+        function submitSubgroupForm() {
+            if (!subgroupForm || !subgroupActionInput || !subgroupConnectionTypeInput) return;
+
+            const selected = collectModalSelectedIds();
+            const action = subgroupModalMode === 'edit' ? 'update_existing' : 'create';
+            if (action === 'create' && !selected.length) {
+                alert('Selecione ao menos um dispositivo no modal.');
+                return;
+            }
+            if (action === 'update_existing' && (!subgroupIdInput || !subgroupIdInput.value)) {
+                alert('Subgrupo alvo não identificado para edição.');
+                return;
+            }
+
+            subgroupActionInput.value = action;
+            subgroupConnectionTypeInput.value = (subgroupConnectionModeInput && subgroupConnectionModeInput.value)
+                ? subgroupConnectionModeInput.value
+                : 'vpn';
+            if (subgroupNameInputHidden) subgroupNameInputHidden.value = (subgroupNameInput && subgroupNameInput.value ? subgroupNameInput.value.trim() : '');
+            if (subgroupIdInput && action === 'update_existing' && activeSubgroupChip) {
+                subgroupIdInput.value = activeSubgroupChip.dataset.subgroupId || '';
+            }
+
+            if (!subgroupNameInputHidden.value) {
+                alert('Informe o nome do subgrupo.');
+                return;
+            }
+
+            subgroupForm.querySelectorAll('input[name="device_ids"]').forEach((node) => node.remove());
+            selected.forEach((id) => {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'device_ids';
+                hidden.value = id;
+                subgroupForm.appendChild(hidden);
+            });
+            subgroupForm.submit();
+        }
+
+        function submitDeleteSubgroup() {
+            if (!subgroupForm || !subgroupActionInput || !subgroupIdInput || !activeSubgroupChip) return;
+            const targetSubgroupId = String(activeSubgroupChip.dataset.subgroupId || '');
+            const targetSubgroupName = String(activeSubgroupChip.dataset.subgroupName || 'Subgrupo');
+            if (!targetSubgroupId) {
+                alert('Subgrupo alvo não identificado para exclusão.');
+                return;
+            }
+            if (!confirm(`Excluir o subgrupo "${targetSubgroupName}"?\nOs dispositivos serão desvinculados desse subgrupo.`)) {
+                return;
+            }
+            subgroupActionInput.value = 'delete_existing';
+            subgroupIdInput.value = targetSubgroupId;
+            if (subgroupNameInputHidden) {
+                subgroupNameInputHidden.value = targetSubgroupName;
+            }
+            subgroupForm.querySelectorAll('input[name="device_ids"]').forEach((node) => node.remove());
+            subgroupForm.submit();
+        }
+
+        function closeSubgroupModalFn() {
+            if (!subgroupModal) return;
+            subgroupModal.classList.add('hidden');
+            subgroupModal.classList.remove('flex');
+            subgroupModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function openSubgroupModalFn() {
+            if (!subgroupModal) return;
+            subgroupModal.classList.remove('hidden');
+            subgroupModal.classList.add('flex');
+            subgroupModal.setAttribute('aria-hidden', 'false');
+        }
+
+        function setupCreateMode() {
+            subgroupModalMode = 'create';
+            const selectedFromTable = new Set(
+                [...rowChecks].filter((cb) => cb.checked).map((cb) => cb.value)
+            );
+            subgroupDeviceCheckboxes.forEach((cb) => {
+                cb.checked = selectedFromTable.has(cb.value);
+            });
+            if (subgroupNameInput) subgroupNameInput.value = '';
+            if (subgroupConnectionModeInput) subgroupConnectionModeInput.value = 'vpn';
+            if (subgroupActionInput) subgroupActionInput.value = 'create';
+            if (subgroupIdInput) subgroupIdInput.value = '';
+            if (deleteSubgroupBtn) deleteSubgroupBtn.classList.add('hidden');
+            if (subgroupModalTitle) subgroupModalTitle.innerHTML = '<i data-lucide="folder-tree"></i> Criar subgrupo';
+            if (subgroupModalSubtitle) subgroupModalSubtitle.textContent = `Grupo principal: ${currentGroupName}`;
+            if (createSubgroupAndAssignLabel) {
+                createSubgroupAndAssignLabel.innerHTML = '<i data-lucide="folder-tree"></i> Salvar e mover selecionados';
+            }
+            if (subgroupDeviceSearch) subgroupDeviceSearch.value = '';
+            if (subgroupSelectAllVisible) subgroupSelectAllVisible.checked = false;
+            applyModalSearch();
+            refreshSubgroupModalState();
+            lucide.createIcons();
+            openSubgroupModalFn();
+        }
+
+        function setupEditMode() {
+            if (!activeSubgroupChip) {
+                alert('Nenhum subgrupo ativo selecionado para edição.');
+                return;
+            }
+            subgroupModalMode = 'edit';
+            const targetSubgroupId = String(activeSubgroupChip.dataset.subgroupId || '');
+            const targetSubgroupName = String(activeSubgroupChip.dataset.subgroupName || '');
+            const targetSubgroupConn = String(activeSubgroupChip.dataset.subgroupConnection || 'direct');
+            subgroupDeviceCheckboxes.forEach((cb) => {
+                const row = cb.closest('.subgroup-device-row');
+                const currentSubgroupId = String((row && row.dataset.currentSubgroupId) || '');
+                cb.checked = currentSubgroupId === targetSubgroupId;
+            });
+            if (subgroupNameInput) subgroupNameInput.value = targetSubgroupName;
+            if (subgroupConnectionModeInput) subgroupConnectionModeInput.value = targetSubgroupConn || 'direct';
+            if (subgroupActionInput) subgroupActionInput.value = 'update_existing';
+            if (subgroupIdInput) subgroupIdInput.value = targetSubgroupId;
+            if (deleteSubgroupBtn) deleteSubgroupBtn.classList.remove('hidden');
+            if (subgroupModalTitle) subgroupModalTitle.innerHTML = '<i data-lucide="settings-2"></i> Editar subgrupo';
+            if (subgroupModalSubtitle) subgroupModalSubtitle.textContent = `Editando: ${targetSubgroupName}`;
+            if (createSubgroupAndAssignLabel) {
+                createSubgroupAndAssignLabel.innerHTML = '<i data-lucide="save"></i> Salvar alterações do subgrupo';
+            }
+            if (subgroupDeviceSearch) subgroupDeviceSearch.value = '';
+            if (subgroupSelectAllVisible) subgroupSelectAllVisible.checked = false;
+            applyModalSearch();
+            refreshSubgroupModalState();
+            lucide.createIcons();
+            openSubgroupModalFn();
+        }
+
+        if (openSubgroupModal && subgroupModal) {
+            openSubgroupModal.addEventListener('click', setupCreateMode);
+        }
+        if (openEditSubgroupModal && subgroupModal) {
+            openEditSubgroupModal.addEventListener('click', setupEditMode);
+        }
+        if (closeSubgroupModal && subgroupModal) {
+            closeSubgroupModal.addEventListener('click', () => {
+                closeSubgroupModalFn();
+            });
+        }
+        if (cancelSubgroupModalFooter && subgroupModal) {
+            cancelSubgroupModalFooter.addEventListener('click', () => {
+                closeSubgroupModalFn();
+            });
+        }
+        if (subgroupModal) {
+            subgroupModal.addEventListener('click', (event) => {
+                if (event.target === subgroupModal) {
+                    closeSubgroupModalFn();
+                }
+            });
+        }
+
+        if (subgroupDeviceSearch) {
+            subgroupDeviceSearch.addEventListener('input', applyModalSearch);
+            applyModalSearch();
+        }
+        if (subgroupSelectAllVisible) {
+            subgroupSelectAllVisible.addEventListener('change', (event) => {
+                const checked = Boolean(event.target.checked);
+                subgroupDeviceRows.forEach((row) => {
+                    if (row.classList.contains('hidden')) return;
+                    const cb = row.querySelector('.subgroup-device-checkbox');
+                    if (cb) cb.checked = checked;
+                });
+                refreshSubgroupModalState();
+            });
+        }
+        subgroupDeviceCheckboxes.forEach((cb) => cb.addEventListener('change', refreshSubgroupModalState));
+        if (subgroupNameInput) {
+            subgroupNameInput.addEventListener('input', refreshSubgroupModalState);
+        }
+        if (createSubgroupAndAssign) {
+            createSubgroupAndAssign.addEventListener('click', submitSubgroupForm);
+        }
+        if (deleteSubgroupBtn) {
+            deleteSubgroupBtn.addEventListener('click', submitDeleteSubgroup);
+        }
+        refreshSubgroupModalState();
+
+        if (bulkActionRun) {
+            bulkActionRun.addEventListener('click', () => {
+                const checked = [...rowChecks].filter(cb => cb.checked).length;
+                if (checked <= 0 || !bulkSubmitTrigger) return;
+                bulkSubmitTrigger.click();
+            });
+        }
+        if (bulkActionClear) {
+            bulkActionClear.addEventListener('click', () => {
+                rowChecks.forEach(cb => cb.checked = false);
+                if (selectAll) selectAll.checked = false;
+                refreshSelectedCount();
+            });
+        }
+
+        // Group combobox with search inside dropdown
+        const groupCombobox = document.getElementById('groupCombobox');
+        if (groupCombobox) {
+            const groupToggle = document.getElementById('groupSelectToggle');
+            const groupMenu = document.getElementById('groupSelectMenu');
+            const groupLabel = document.getElementById('groupSelectLabel');
+            const groupValue = document.getElementById('groupSelectValue');
+            const groupSearchInner = document.getElementById('groupSelectSearchInner');
+            const groupOptions = Array.from(groupCombobox.querySelectorAll('[data-group-option]'));
+
+            const syncActive = () => {
+                groupOptions.forEach((opt) => {
+                    const active = (opt.dataset.value || '') === (groupValue.value || '');
+                    opt.classList.toggle('bg-blue-500/20', active);
+                    opt.classList.toggle('text-blue-400', active);
+                });
+            };
+
+            const closeMenu = () => {
+                groupMenu.classList.add('hidden');
+            };
+
+            if (groupToggle && groupMenu && groupSearchInner && groupValue && groupLabel) {
+                groupToggle.addEventListener('click', () => {
+                    groupMenu.classList.toggle('hidden');
+                    if (!groupMenu.classList.contains('hidden')) {
+                        groupSearchInner.focus();
+                    }
+                });
+
+                groupSearchInner.addEventListener('input', (e) => {
+                    const term = (e.target.value || '').toLowerCase().trim();
+                    groupOptions.forEach((opt) => {
+                        const text = (opt.textContent || '').toLowerCase();
+                        opt.classList.toggle('hidden', Boolean(term) && !text.includes(term));
+                    });
+                });
+
+                groupOptions.forEach((opt) => {
+                    opt.addEventListener('click', () => {
+                        groupValue.value = opt.dataset.value || '';
+                        groupLabel.textContent = opt.dataset.label || 'Todos os grupos';
+                        syncActive();
+                        closeMenu();
+                    });
+                });
+
+                document.addEventListener('click', (event) => {
+                    if (!groupCombobox.contains(event.target)) {
+                        closeMenu();
+                    }
+                });
+
+                syncActive();
+            }
+        }
+    });
+</script>
+{% endblock %}

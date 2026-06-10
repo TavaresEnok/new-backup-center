@@ -1,0 +1,279 @@
+{% extends "base_redesign.html" %}
+{% block title %}Agendamentos · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<b>Agendamentos</b>{% endblock %}
+
+{% block head %}
+<style>
+  .sch-page-btn{display:inline-flex;align-items:center;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer}
+  .sch-page-btn.active{background:var(--pine);color:#fff;border-color:var(--pine)}
+  .sch-group-select{accent-color:var(--pine);width:17px;height:17px;margin-top:2px}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:640px){.frow{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/schedules.py list_schedules): tenant, schedule_overview, group_overview,
+   missing_auto_devices, missing_auto_*, counters, can_manage_admin, can_operator #}
+{% set queue_disabled = schedule_overview.get('queue_disabled', 0) %}
+{% set coverage_pct = ((schedule_overview.with_schedule * 100 / schedule_overview.total_active_devices)|round(0)|int) if schedule_overview.total_active_devices else 0 %}
+{% set counters = counters if counters is defined else namespace(all=(group_overview|length if group_overview else 0), active=0, paused=0, failed=0) %}
+{% set role = session.get('user_role') %}
+{% set can_manage_admin = can_manage_admin if can_manage_admin is defined else role in ['super_admin', 'tenant_owner', 'tenant_admin'] %}
+{% set can_operator = can_operator if can_operator is defined else role in ['super_admin', 'tenant_owner', 'tenant_admin', 'tenant_technician'] %}
+
+<div class="wrap">
+  <div class="page-h head-row">
+    <div>
+      <div class="eyebrow">Rotinas de backup</div>
+      <h1>Agendamentos</h1>
+      <p>Uma janela diária cuida de tudo automaticamente. Abaixo você acompanha a cobertura e executa operações manuais quando precisar.</p>
+    </div>
+    <div class="actions">
+      <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-ghost"><i data-lucide="arrow-left"></i>Voltar</a>
+      <a href="#agendamento-global" class="btn btn-pine"><i data-lucide="clock-3"></i>Configurar janela</a>
+    </div>
+  </div>
+
+  <section id="agendamento-global" class="panel schedule-hero">
+    <div class="schedule-hero-l">
+      <div class="eyebrow">Janela de backup diária</div>
+      <div class="schedule-time">Todo dia às {{ schedule_overview.default_daily_time }} <span class="utc">UTC</span></div>
+      <p style="margin:14px 0 0;font-size:14px;color:var(--ink-2);max-width:50ch;line-height:1.6;">Quando a janela dispara, o lote automático executa os dispositivos ativos em provedores ativos e prontos para a rotina diária.</p>
+      <div class="hero-stats">
+        <div class="hstat"><div class="n">{{ schedule_overview.total_active_devices }}</div><div class="l">ativos operacionais</div></div>
+        <div class="hstat"><div class="n" style="color:var(--pine)">{{ schedule_overview.mass_backup_eligible_devices }}</div><div class="l">executados no massa</div></div>
+        <div class="hstat"><div class="n" style="color:var(--good)">{{ schedule_overview.with_schedule }}</div><div class="l">prontos</div></div>
+        <div class="hstat"><div class="n" style="color:var(--care)">{{ schedule_overview.without_schedule }}</div><div class="l">pendentes</div></div>
+      </div>
+      {% if schedule_overview.mass_backup_excluded_devices or schedule_overview.inactive_group_devices %}
+      <p class="faint" style="margin:12px 0 0;font-size:12.5px;line-height:1.5">
+        {% if schedule_overview.inactive_group_devices %}{{ schedule_overview.inactive_group_devices }} dispositivo(s) em provedores inativos ficam fora destes contadores.{% endif %}
+        {% if schedule_overview.mass_backup_excluded_devices %} {{ schedule_overview.mass_backup_excluded_devices }} dispositivo(s) Grafana/Zabbix ficam fora do backup em massa.{% endif %}
+      </p>
+      {% endif %}
+
+      {% if can_manage_admin %}
+      <form method="POST" action="{{ url_for('tenant_schedules.apply_daily_schedule', tenant_slug=tenant.slug) }}" class="schedule-edit">
+        {% include 'partials/csrf.html' %}
+        <input type="hidden" name="return_to" value="schedules">
+        <input type="hidden" name="apply_scope" value="missing">
+        <div class="grp"><label class="lbl" style="margin:0">Horário global (UTC)</label><input id="daily_time" name="daily_time" type="time" value="{{ schedule_overview.default_daily_time }}" required class="inp mono" style="width:132px"></div>
+        <div class="grp" style="flex:1;min-width:260px">
+          <label class="lbl" style="margin:0">Dispositivos com backup automático</label>
+          <div class="field" style="pointer-events:none">
+            <i data-lucide="refresh-cw"></i>
+            <span style="font-size:13.5px;color:var(--ink)">Sincronizar apenas os pendentes</span>
+          </div>
+        </div>
+        <button type="submit" onclick="return confirm('Sincronizar a rotina diaria para os dispositivos pendentes?')" class="btn btn-pine"><i data-lucide="check"></i>Sincronizar automáticos</button>
+      </form>
+      {% else %}
+      <div class="schedule-edit"><span class="faint" style="font-size:13px">Apenas administradores podem alterar as rotinas de agendamento.</span></div>
+      {% endif %}
+    </div>
+
+    <div class="schedule-hero-r">
+      <div class="ring">
+        <svg viewBox="0 0 160 160">
+          <circle cx="80" cy="80" r="64" fill="none" stroke="var(--inset)" stroke-width="11"></circle>
+          <circle cx="80" cy="80" r="64" fill="none" stroke="var(--good)" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="{{ coverage_pct }} 100"></circle>
+        </svg>
+        <div class="ctr"><div><div class="p">{{ coverage_pct }}%</div><div class="s">prontos</div></div></div>
+      </div>
+      {% if can_manage_admin %}
+      <form method="POST" action="{{ url_for('tenant_schedules.enable_backup_queue_all', tenant_slug=tenant.slug) }}" onsubmit="return confirm('Habilitar backup automatico para todos os dispositivos pendentes?');">
+        {% include 'partials/csrf.html' %}<input type="hidden" name="return_to" value="schedules">
+        <button type="submit" {% if queue_disabled == 0 %}disabled style="opacity:.55;cursor:not-allowed"{% endif %} class="btn {% if queue_disabled > 0 %}btn-soft{% else %}btn-line{% endif %} btn-sm"><i data-lucide="power"></i>Habilitar automático · {{ queue_disabled }} pendentes</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if can_manage_admin %}
+  <div class="op-section">
+    <div class="op-label"><i data-lucide="play-circle"></i>Executar agora</div>
+    <div class="op-grid">
+      <form id="form-run-backup-mass-schedules" action="{{ url_for('tenant_devices.run_backup_all', tenant_slug=tenant.slug) }}" method="POST" style="display:flex">{% include 'partials/csrf.html' %}<input type="hidden" name="include_unvalidated" value="1"><button type="button" data-run-backup-live data-form-id="form-run-backup-mass-schedules" class="optile good"><span class="optile-ic"><i data-lucide="play-circle"></i></span><span><span class="t">Backup em massa</span><span class="d">Dispara backup de todos os dispositivos ativos agora.</span></span></button></form>
+      <form id="form-run-reprocess-last-failed" action="{{ url_for('tenant_devices.run_reprocess_failures', tenant_slug=tenant.slug) }}" method="POST" style="display:flex">{% include 'partials/csrf.html' %}<input type="hidden" name="scope" value="last_failed"><input type="hidden" name="transient_only" value="0"><button type="button" data-run-backup-live data-form-id="form-run-reprocess-last-failed" class="optile care"><span class="optile-ic"><i data-lucide="rotate-ccw"></i></span><span><span class="t">Backup dos falhados</span><span class="d">Executa somente dispositivos cujo último backup está em falha.</span></span></button></form>
+      <form id="form-run-connection-audit-mass-schedules" action="{{ url_for('tenant_devices.run_connection_audit_all', tenant_slug=tenant.slug) }}" method="POST" style="display:flex">{% include 'partials/csrf.html' %}<button type="button" data-run-backup-live data-form-id="form-run-connection-audit-mass-schedules" class="optile"><span class="optile-ic"><i data-lucide="wifi"></i></span><span><span class="t">Validar conectividade</span><span class="d">Testa credencial, rota e porta de todo o inventário.</span></span></button></form>
+      <form id="form-run-reprocess-failed-today" action="{{ url_for('tenant_devices.run_reprocess_failures', tenant_slug=tenant.slug) }}" method="POST" style="display:flex">{% include 'partials/csrf.html' %}<input type="hidden" name="scope" value="today"><input type="hidden" name="transient_only" value="0"><button type="button" data-run-backup-live data-form-id="form-run-reprocess-failed-today" class="optile"><span class="optile-ic"><i data-lucide="rotate-cw"></i></span><span><span class="t">Falhas de hoje</span><span class="d">Refaz os dispositivos que falharam em backups executados hoje.</span></span></button></form>
+      <form id="form-run-reprocess-transient-24h" action="{{ url_for('tenant_devices.run_reprocess_failures', tenant_slug=tenant.slug) }}" method="POST" style="display:flex">{% include 'partials/csrf.html' %}<input type="hidden" name="scope" value="24h"><input type="hidden" name="transient_only" value="1"><button type="button" data-run-backup-live data-form-id="form-run-reprocess-transient-24h" class="optile"><span class="optile-ic"><i data-lucide="zap"></i></span><span><span class="t">Transitórias 24h</span><span class="d">Refaz apenas falhas intermitentes das últimas 24h.</span></span></button></form>
+    </div>
+  </div>
+
+  <div class="op-section">
+    <div class="op-label"><i data-lucide="shield-alert"></i>Manutenção e emergência</div>
+    <div class="op-grid">
+      <form method="POST" action="{{ url_for('tenant_activity.clear_live_alerts', tenant_slug=tenant.slug) }}" style="display:flex" onsubmit="return confirm('Apagar alertas de tempo real e alertas de atividade deste tenant?');">{% include 'partials/csrf.html' %}<input type="hidden" name="return_to" value="schedules"><button type="submit" class="optile care"><span class="optile-ic"><i data-lucide="bell-off"></i></span><span><span class="t">Limpar tempo real/alertas</span><span class="d">Remove alertas de tempo real e atividade.</span></span></button></form>
+      <form method="POST" action="{{ url_for('tenant_backups.clear_failed_backups', tenant_slug=tenant.slug) }}" style="display:flex" onsubmit="return confirm('Apagar todos os backups com status failed agora?');">{% include 'partials/csrf.html' %}<input type="hidden" name="return_to" value="schedules"><button type="submit" class="optile crit"><span class="optile-ic"><i data-lucide="trash-2"></i></span><span><span class="t">Limpar backups failed</span><span class="d">Apaga registros de backup com status de falha.</span></span></button></form>
+      <form method="POST" action="{{ url_for('tenant_schedules.stop_all_backups', tenant_slug=tenant.slug) }}" style="display:flex" onsubmit="return confirm('Parar TODOS os backups em execucao e remover da fila agora?');">{% include 'partials/csrf.html' %}<button type="submit" class="optile crit"><span class="optile-ic"><i data-lucide="x-octagon"></i></span><span><span class="t">Parar tudo</span><span class="d">Encerra execuções e esvazia a fila imediatamente.</span></span></button></form>
+    </div>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap;">
+    <div><div style="font-family:var(--serif);font-size:21px">Cobertura por grupo</div><div class="faint" style="font-size:13px;margin-top:2px">Identifique grupos com dispositivos pendentes antes da próxima janela.</div></div>
+    <div class="row g2 ic wr">
+      <div class="field" style="min-width:220px"><i data-lucide="search"></i><input id="groupSearchInput" type="text" placeholder="Buscar grupo ou provedor…"></div>
+      <div class="seg">
+        <button type="button" class="sch-filter-btn is-active" data-filter="ALL">Todos <span class="c">{{ counters.all }}</span></button>
+        <button type="button" class="sch-filter-btn" data-filter="ACTIVE">Ativos <span class="c">{{ counters.active }}</span></button>
+        <button type="button" class="sch-filter-btn" data-filter="PAUSED">Pausados <span class="c">{{ counters.paused }}</span></button>
+        <button type="button" class="sch-filter-btn" data-filter="FAILED">Pendentes <span class="c">{{ counters.failed }}</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="groupBatchBar" class="batchbar">
+    <div class="row ic g3"><span id="groupBatchCount" class="tag tag-pine">0</span><span id="groupBatchText" class="faint" style="font-size:13px">0 grupos selecionados</span></div>
+    <div class="row g2"><button type="button" id="groupClearSelection" class="btn btn-ghost btn-sm">Limpar seleção</button></div>
+  </div>
+
+  <div id="groupCardsGrid" class="gcgrid">
+    {% if group_overview %}
+    {% set connection_labels = {'direct':'Direto','vpn':'VPN','jump_host':'Jump Host','jump':'Jump Host'} %}
+    {% for group in group_overview %}
+      {% if group.with_schedule == 0 %}{% set group_state = 'paused' %}{% elif group.auto_disabled > 0 or group.without_schedule > 0 %}{% set group_state = 'failed' %}{% else %}{% set group_state = 'active' %}{% endif %}
+      {% set pct_color = 'var(--good)' if group.coverage_pct >= 60 else 'var(--care)' %}
+      <article class="panel gc sch-group-card state-{{ group_state }}" data-group-name="{{ group.name|lower }}" data-group-state="{{ group_state }}" data-group-id="{{ group.group_id if group.group_id else 'ungrouped' }}">
+        <div class="gc-head">
+          <input type="checkbox" class="sch-group-select" data-group-id="{{ group.group_id if group.group_id else 'ungrouped' }}">
+          <div style="flex:1;min-width:0">
+            <div class="gc-name" title="{{ group.name }}">{{ group.name }}</div>
+            <div class="row g2 ic wr" style="margin-top:7px">
+              {% if group_state=='active' %}<span class="tag tag-good">Ativo</span>{% elif group_state=='paused' %}<span class="tag">Pausado</span>{% else %}<span class="tag tag-care">Pendente</span>{% endif %}
+              <span class="tag">{{ connection_labels.get(group.connection_type, group.connection_type|capitalize) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="gc-body">
+          <div>
+            <div class="gc-cov"><span class="pct" style="color:{{ pct_color }}">{{ group.coverage_pct }}%</span><span class="lab">{{ group.with_schedule }} de {{ group.total }} prontos</span></div>
+            <div class="gc-prog"><span style="width:{{ group.coverage_pct }}%;background:{{ pct_color }}"></span></div>
+          </div>
+          <div class="gc-mets" style="margin:0">
+            <div class="gc-met"><div class="l">Total</div><div class="v">{{ group.total }}</div></div>
+            <div class="gc-met ok"><div class="l">Prontos</div><div class="v">{{ group.with_schedule }}</div></div>
+            <div class="gc-met fail {% if group.without_schedule > 0 %}on{% endif %}"><div class="l">Pend.</div><div class="v">{{ group.without_schedule }}</div></div>
+            <div class="gc-met unknown"><div class="l">Auto off</div><div class="v">{{ group.auto_disabled }}</div></div>
+          </div>
+          <div class="faint" style="font-size:11px">Janela global: {{ schedule_overview.default_daily_time }} · participam apenas dispositivos prontos para a rotina diária.</div>
+        </div>
+        <div class="gc-foot">
+          {% if group.group_id %}
+          <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, group_id=group.group_id) }}" class="btn btn-line btn-sm"><i data-lucide="folder-tree"></i>Dispositivos</a>
+          {% if can_operator and group.uses_jump_host and group.is_active %}
+          <form id="form-test-jump-schedules-{{ group.group_id }}" action="{{ url_for('tenant_groups.diagnose_group_jump', tenant_slug=tenant.slug, group_id=group.group_id) }}" method="POST" style="display:inline">{% include 'partials/csrf.html' %}<button type="button" data-run-backup-live data-form-id="form-test-jump-schedules-{{ group.group_id }}" class="btn btn-soft btn-sm"><i data-lucide="shield-check"></i>Testar Jump Host</button></form>
+          {% endif %}
+          {% else %}
+          <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}" class="btn btn-line btn-sm"><i data-lucide="folder-tree"></i>Dispositivos</a>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+    {% else %}
+    <div style="grid-column:1/-1"><div class="empty"><div class="empty-ic"><i data-lucide="search-x"></i></div><h4>Nenhum grupo com dispositivos ativos</h4></div></div>
+    {% endif %}
+  </div>
+
+  <div id="groupCardsPager" style="display:none;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:16px">
+    <span id="groupCardsPagerInfo" class="faint" style="font-size:12px">Mostrando 0-0 de 0 grupos</span>
+    <div id="groupCardsPagerLinks" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  </div>
+
+  <section class="panel" style="margin-top:32px">
+    <div class="panel-head"><h3><i data-lucide="server-off"></i>Dispositivos fora da rotina automática</h3><span class="tag tag-care">{{ missing_auto_total }} pendentes</span></div>
+    {% if missing_auto_total > 0 %}
+    <div class="sc" style="overflow-x:auto"><table class="tbl">
+      <thead><tr><th class="col-name">Dispositivo</th><th class="col-sm">Grupo</th><th class="col-md shrink">Endereço</th><th style="text-align:right">Ação</th></tr></thead>
+      <tbody>
+        {% for device in missing_auto_devices %}
+        <tr>
+          <td class="col-name dv-name">{{ device.name }}</td>
+          <td class="faint">{{ device.group.name if device.group else 'Sem grupo' }}</td>
+          <td class="mono" style="font-size:12.5px">{{ device.ip_address }}:{{ device.port }}</td>
+          <td style="text-align:right">{% if can_manage_admin %}<a href="{{ url_for('tenant_devices.edit_device', tenant_slug=tenant.slug, device_id=device.id) }}" class="btn btn-ghost btn-sm"><i data-lucide="settings-2"></i>Ajustar rotina</a>{% else %}<span class="faint" style="font-size:11px">Sem permissão</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+    {% if missing_auto_total_pages > 1 %}
+    <div class="pg">
+      <span class="faint" style="font-size:12px">Mostrando {{ missing_auto_start }}-{{ missing_auto_end }} de {{ missing_auto_total }}</span>
+      <div class="row g2 wr">
+        {% if missing_auto_page > 1 %}<a href="{{ url_for('tenant_schedules.list_schedules', tenant_slug=tenant.slug, missing_page=missing_auto_page-1, missing_per_page=missing_auto_per_page) }}" class="btn btn-ghost btn-sm">Anterior</a>{% endif %}
+        {% for p in range(1, missing_auto_total_pages + 1) %}{% if p == missing_auto_page %}<span class="btn btn-pine btn-sm">{{ p }}</span>{% else %}<a href="{{ url_for('tenant_schedules.list_schedules', tenant_slug=tenant.slug, missing_page=p, missing_per_page=missing_auto_per_page) }}" class="btn btn-ghost btn-sm">{{ p }}</a>{% endif %}{% endfor %}
+        {% if missing_auto_page < missing_auto_total_pages %}<a href="{{ url_for('tenant_schedules.list_schedules', tenant_slug=tenant.slug, missing_page=missing_auto_page+1, missing_per_page=missing_auto_per_page) }}" class="btn btn-ghost btn-sm">Próximo</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div style="padding:18px 26px;color:var(--good);font-size:13.5px">Tudo certo: todos os dispositivos ativos já estão na rotina automática.</div>
+    {% endif %}
+  </section>
+</div>
+
+{% include 'partials/backup_live_modal.html' %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.lucide) window.lucide.createIcons();
+  const searchInput = document.getElementById('groupSearchInput');
+  const filterButtons = document.querySelectorAll('.sch-filter-btn[data-filter]');
+  const cards = document.querySelectorAll('.sch-group-card');
+  const checks = document.querySelectorAll('.sch-group-select');
+  const batchBar = document.getElementById('groupBatchBar');
+  const batchCount = document.getElementById('groupBatchCount');
+  const batchText = document.getElementById('groupBatchText');
+  const clearBtn = document.getElementById('groupClearSelection');
+  const groupPager = document.getElementById('groupCardsPager');
+  const groupPagerInfo = document.getElementById('groupCardsPagerInfo');
+  const groupPagerLinks = document.getElementById('groupCardsPagerLinks');
+  let activeFilter = 'ALL'; let currentPage = 1; const pageSize = 9; let filteredCards = [];
+
+  function renderGroupPager(totalPages, current) {
+    if (!groupPagerLinks) return; groupPagerLinks.innerHTML = '';
+    const makeBtn = (label, page, isActive) => {
+      const el = document.createElement('button'); el.type = 'button'; el.className = `sch-page-btn${isActive ? ' active' : ''}`; el.textContent = label;
+      if (!isActive) el.addEventListener('click', () => { currentPage = page; applyGroupFilters(); });
+      return el;
+    };
+    const prevBtn = makeBtn('Anterior', Math.max(1, current - 1), false); prevBtn.disabled = current <= 1; if (prevBtn.disabled) prevBtn.style.opacity = '0.55'; groupPagerLinks.appendChild(prevBtn);
+    for (let i = 1; i <= totalPages; i += 1) groupPagerLinks.appendChild(makeBtn(String(i), i, i === current));
+    const nextBtn = makeBtn('Próximo', Math.min(totalPages, current + 1), false); nextBtn.disabled = current >= totalPages; if (nextBtn.disabled) nextBtn.style.opacity = '0.55'; groupPagerLinks.appendChild(nextBtn);
+  }
+  function applyGroupPagination() {
+    filteredCards = [...cards].filter((card) => card.dataset.filtered === '1');
+    const total = filteredCards.length; const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const start = (currentPage - 1) * pageSize; const end = start + pageSize;
+    filteredCards.forEach((card, index) => { card.style.display = (index >= start && index < end) ? '' : 'none'; });
+    if (groupPagerInfo) { const from = total === 0 ? 0 : (start + 1); const to = total === 0 ? 0 : Math.min(end, total); groupPagerInfo.textContent = `Mostrando ${from}-${to} de ${total} grupos`; }
+    if (groupPager) groupPager.style.display = total > 0 ? 'flex' : 'none';
+    renderGroupPager(totalPages, currentPage);
+  }
+  function applyGroupFilters() {
+    const term = (searchInput?.value || '').trim().toLowerCase();
+    cards.forEach((card) => {
+      const name = (card.dataset.groupName || '').toLowerCase(); const state = card.dataset.groupState || 'active';
+      const searchOk = !term || name.includes(term);
+      const stateOk = activeFilter === 'ALL' || (activeFilter === 'ACTIVE' && state === 'active') || (activeFilter === 'PAUSED' && state === 'paused') || (activeFilter === 'FAILED' && state === 'failed');
+      card.dataset.filtered = (searchOk && stateOk) ? '1' : '0';
+      if (card.dataset.filtered !== '1') card.style.display = 'none';
+    });
+    applyGroupPagination();
+  }
+  function updateBatchState() {
+    const selected = [...checks].filter((cb) => cb.checked).length;
+    if (batchCount) batchCount.textContent = String(selected);
+    if (batchText) batchText.textContent = `${selected} grupos selecionados`;
+    if (batchBar) batchBar.classList.toggle('is-visible', selected > 0);
+  }
+  filterButtons.forEach((btn) => { btn.addEventListener('click', () => { activeFilter = btn.dataset.filter || 'ALL'; filterButtons.forEach((b) => b.classList.remove('is-active')); btn.classList.add('is-active'); currentPage = 1; applyGroupFilters(); }); });
+  if (searchInput) searchInput.addEventListener('input', () => { currentPage = 1; applyGroupFilters(); });
+  checks.forEach((cb) => cb.addEventListener('change', updateBatchState));
+  if (clearBtn) clearBtn.addEventListener('click', () => { checks.forEach((cb) => { cb.checked = false; }); updateBatchState(); });
+  applyGroupFilters(); updateBatchState();
+});
+</script>
+{% endblock %}

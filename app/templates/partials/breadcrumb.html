@@ -1,0 +1,44 @@
+{% set page_title = page_title|default('Dashboard') %}
+
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">{{ page_title }}</h2>
+    <nav>
+        <ol class="flex items-center gap-1.5">
+            {% if superadmin_return_url %}
+            <li>
+                <a href="{{ superadmin_return_url }}"
+                    class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500">
+                    Admin
+                    <svg class="w-4 h-4" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.0765 12.667L10.2432 8.50033L6.0765 4.33366" stroke="currentColor" stroke-width="1.2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
+            </li>
+            {% endif %}
+            <li>
+                <a href="{{ url_for('tenant.dashboard', tenant_slug=tenant.slug if tenant else 'admin') }}"
+                    class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500">
+                    Home
+                    <svg class="w-4 h-4" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.0765 12.667L10.2432 8.50033L6.0765 4.33366" stroke="currentColor" stroke-width="1.2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
+            </li>
+            {% if breadcrumb_parent %}
+            <li>
+                <a href="{{ breadcrumb_parent.url }}"
+                    class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-brand-500">
+                    {{ breadcrumb_parent.name }}
+                    <svg class="w-4 h-4" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.0765 12.667L10.2432 8.50033L6.0765 4.33366" stroke="currentColor" stroke-width="1.2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </a>
+            </li>
+            {% endif %}
+            <li class="text-sm font-medium text-gray-800 dark:text-white/90">{{ page_title }}</li>
+        </ol>
+    </nav>
+</div>

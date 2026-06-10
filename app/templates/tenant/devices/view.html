@@ -1,0 +1,186 @@
+{% extends "base_redesign.html" %}
+{% block title %}{{ device.name }} · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}">Dispositivos</a><i data-lucide="chevron-right"></i><b>{{ device.name }}</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/devices.py view_device): tenant, device, backups,
+   backups_total, backup_page, backup_per_page, backup_total_pages, return_group #}
+{% set role = session.get('user_role') %}
+{% set can_operator = role in ['super_admin','tenant_owner','tenant_admin','tenant_technician'] %}
+{% set status_label = 'Em dia' if device.last_backup_status == 'success' else ('Pendência' if device.last_backup_status == 'failure' else 'Sem histórico') %}
+{% set status_tag = 'tag-good' if device.last_backup_status == 'success' else ('tag-care' if device.last_backup_status == 'failure' else '') %}
+
+<div class="wrap">
+  <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, group_id=return_group.id if return_group else None) }}" class="btn btn-ghost btn-sm" style="margin-bottom:18px"><i data-lucide="arrow-left"></i>Voltar aos dispositivos</a>
+
+  <div class="panel device-hero">
+    <span class="device-hero-ic"><i data-lucide="server"></i></span>
+    <div style="flex:1;min-width:0">
+      <div class="row g2 ic wr" style="margin-bottom:8px">
+        <span class="tag {{ status_tag }}"><i data-lucide="{{ 'check' if device.last_backup_status == 'success' else ('alert-triangle' if device.last_backup_status == 'failure' else 'clock') }}"></i>{{ status_label }}</span>
+        <span class="tag tag-blue">{{ device.type.name if device.type else 'Genérico' }}</span>
+        {% if device.group %}<span class="tag tag-lilac">{{ device.group.name }}</span>{% endif %}
+      </div>
+      <h1>{{ device.name }}</h1>
+      <div class="muted" style="font-size:13.5px;margin-top:6px">
+        <span class="mono">{{ device.ip_address }}:{{ device.port }}</span>
+        {% if device.last_backup_at %}
+        · último backup <b class="mono" style="color:var(--ink)">{{ (device.last_backup_at|localtime).strftime('%d/%m %H:%M') }}</b>
+        {% else %}
+        · nenhum backup registrado
+        {% endif %}
+      </div>
+    </div>
+    <div class="actions">
+      <form id="form-backup-{{ device.id }}" action="{{ url_for('tenant_devices.run_backup', tenant_slug=tenant.slug, device_id=device.id) }}" method="POST" style="display:inline">
+        {% include 'partials/csrf.html' %}
+        <button type="submit" data-run-backup-live data-form-id="form-backup-{{ device.id }}" class="btn btn-pine"><i data-lucide="play"></i>Fazer backup</button>
+      </form>
+      <form id="form-test-connection-{{ device.id }}" action="{{ url_for('tenant_devices.test_connection', tenant_slug=tenant.slug, device_id=device.id) }}" method="POST" style="display:inline">
+        {% include 'partials/csrf.html' %}
+        <button type="button" id="btn-test-connection-{{ device.id }}" class="btn btn-line"><i data-lucide="plug-zap"></i><span data-test-label>Testar conexão</span><span data-test-loading class="hidden">Testando…</span></button>
+      </form>
+      <a href="{{ url_for('tenant_compare.compare_backups', tenant_slug=tenant.slug, device_id=device.id) }}" class="btn btn-line"><i data-lucide="git-compare"></i>Comparar</a>
+      <a href="{{ url_for('tenant_devices.edit_device', tenant_slug=tenant.slug, device_id=device.id) }}" class="btn btn-ghost"><i data-lucide="edit"></i>Editar</a>
+      {% if device.last_backup_status == 'failure' %}
+      <form action="{{ url_for('tenant_devices.clear_backup_error', tenant_slug=tenant.slug, device_id=device.id) }}" method="POST" style="display:inline">
+        {% include 'partials/csrf.html' %}
+        {% if return_group %}<input type="hidden" name="return_group_id" value="{{ return_group.id }}">{% endif %}
+        <button type="submit" class="btn btn-ghost"><i data-lucide="eraser"></i>Apagar erro</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel panel-pad">
+      <div style="font-size:13px;color:var(--ink-2);margin-bottom:8px">Detalhes</div>
+      <div class="info">
+        <div class="info-row"><span class="k"><i data-lucide="globe"></i>Endereço IP</span><span class="v mono">{{ device.ip_address }}</span></div>
+        <div class="info-row"><span class="k"><i data-lucide="plug"></i>Porta</span><span class="v mono">{{ device.port }}</span></div>
+        <div class="info-row"><span class="k"><i data-lucide="server"></i>Tipo</span><span class="v">{{ device.type.name if device.type else 'Genérico' }}</span></div>
+        <div class="info-row"><span class="k"><i data-lucide="folder-tree"></i>Grupo</span><span class="v">{{ device.group.name if device.group else '—' }}</span></div>
+        <div class="info-row"><span class="k"><i data-lucide="user"></i>Usuário</span><span class="v mono">{{ device.username }}</span></div>
+        <div class="info-row"><span class="k"><i data-lucide="refresh-cw"></i>Auto-backup</span><span class="v"><span class="tag {% if device.backup_scheduled %}tag-pine{% endif %}">{{ 'Ativo' if device.backup_scheduled else 'Desativado' }}</span></span></div>
+        <div class="info-row"><span class="k"><i data-lucide="file-text"></i>Descrição</span><span class="v">{{ device.description or 'Sem descrição' }}</span></div>
+      </div>
+    </div>
+
+    <div data-backup-auto-refresh class="panel">
+      <div class="panel-head">
+        <h3><i data-lucide="history"></i>Backups recentes</h3>
+        <a href="{{ url_for('tenant_backups.list_backups', tenant_slug=tenant.slug) }}?device_id={{ device.id }}" class="faint" style="font-size:12.5px">Ver tudo →</a>
+      </div>
+      <div class="sc" style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Quando</th><th class="col-sm shrink">Tamanho</th><th class="col-sm shrink">Duração</th><th>Resultado</th><th style="text-align:right">Ações</th></tr></thead>
+          <tbody>
+            {% for backup in backups %}
+            {% set s = backup.status_value or backup.status %}
+            {% set dur = (backup.duration_seconds ~ 's') if backup.duration_seconds else '—' %}
+            {% set sz = ((backup.file_size_bytes / 1024)|int ~ ' KB') if backup.file_size_bytes else '—' %}
+            <tr>
+              <td><span class="when mono" style="font-size:12px">{{ (backup.created_at|localtime).strftime('%d/%m/%Y %H:%M') if backup.created_at else '—' }}</span></td>
+              <td class="mono faint" style="font-size:12px">{{ sz }}</td>
+              <td class="mono faint" style="font-size:12px">{{ dur }}</td>
+              <td>{% if s=='success' %}<span class="tag tag-good"><i data-lucide="check"></i>Concluído</span>{% elif s=='failed' %}<span class="tag tag-care"><i data-lucide="alert-triangle"></i>Pendência</span>{% else %}<span class="tag">{{ s }}</span>{% endif %}</td>
+              <td><div class="row g2" style="justify-content:flex-end">
+                <a href="{{ url_for('tenant_backups.view_backup', tenant_slug=tenant.slug, backup_id=backup.id) }}" class="act" title="Detalhes"><i data-lucide="eye"></i></a>
+                {% if backup.file_path %}<a href="{{ url_for('tenant_backups.download_backup', tenant_slug=tenant.slug, backup_id=backup.id) }}" class="act go" title="Baixar"><i data-lucide="download"></i></a>{% endif %}
+              </div></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5"><div class="empty"><div class="empty-ic"><i data-lucide="inbox"></i></div><h4>Nenhum backup registrado</h4><p>Execute o primeiro backup deste dispositivo.</p></div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if backup_total_pages > 1 %}
+      <div class="pg">
+        <span class="faint" style="font-size:12px">Página {{ backup_page }} de {{ backup_total_pages }} · {{ backups_total }} backup(s)</span>
+        <div class="row g2 wr">
+          {% if backup_page > 1 %}<a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id, group_id=return_group.id if return_group else None, backup_page=backup_page-1) }}" class="btn btn-ghost btn-sm">Anterior</a>{% endif %}
+          {% set p_start = [1, backup_page-2]|max %}{% set p_end = [backup_total_pages, backup_page+2]|min %}
+          {% for p in range(p_start, p_end+1) %}
+            {% if p == backup_page %}<span class="btn btn-pine btn-sm">{{ p }}</span>
+            {% else %}<a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id, group_id=return_group.id if return_group else None, backup_page=p) }}" class="btn btn-ghost btn-sm">{{ p }}</a>{% endif %}
+          {% endfor %}
+          {% if backup_page < backup_total_pages %}<a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id, group_id=return_group.id if return_group else None, backup_page=backup_page+1) }}" class="btn btn-ghost btn-sm">Próxima</a>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% include 'partials/backup_live_modal.html' %}
+
+<div id="connection-test-modal" class="bc-modal hidden" aria-hidden="true">
+  <div class="bc-modal-panel" style="width:min(560px,100%)">
+    <div class="bc-modal-head">
+      <div>
+        <h3 class="bc-modal-title"><i data-lucide="plug-zap"></i>Resultado do teste de conexão</h3>
+        <p class="bc-modal-sub">{{ device.name }}</p>
+      </div>
+      <button type="button" id="connection-test-close" class="act" title="Fechar"><i data-lucide="x"></i></button>
+    </div>
+    <div class="bc-modal-body">
+      <div class="info">
+        <div class="info-row"><span class="k">Dispositivo</span><span id="connection-test-device" class="v">{{ device.name }}</span></div>
+        <div class="info-row"><span class="k">Protocolo</span><span id="connection-test-protocol" class="v">-</span></div>
+        <div class="info-row"><span class="k">Tempo</span><span id="connection-test-elapsed" class="v">-</span></div>
+      </div>
+      <div style="margin-top:16px">
+        <p id="connection-test-status" class="tag"></p>
+        <p id="connection-test-message" class="faint" style="margin:10px 0 0;font-size:13px"></p>
+      </div>
+    </div>
+    <div class="bc-modal-foot" style="justify-content:flex-end">
+      <button type="button" id="connection-test-ok" class="btn btn-pine">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('form-test-connection-{{ device.id }}');
+    const button = document.getElementById('btn-test-connection-{{ device.id }}');
+    const label = button?.querySelector('[data-test-label]');
+    const loading = button?.querySelector('[data-test-loading]');
+    const modal = document.getElementById('connection-test-modal');
+    const closeButton = document.getElementById('connection-test-close');
+    const okButton = document.getElementById('connection-test-ok');
+    const deviceEl = document.getElementById('connection-test-device');
+    const protocolEl = document.getElementById('connection-test-protocol');
+    const elapsedEl = document.getElementById('connection-test-elapsed');
+    const statusEl = document.getElementById('connection-test-status');
+    const messageEl = document.getElementById('connection-test-message');
+    if (!form || !button) return;
+    const openModal = () => { modal.classList.remove('hidden'); modal.classList.add('flex'); modal.setAttribute('aria-hidden', 'false'); if (window.lucide) lucide.createIcons(); };
+    const closeModal = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); modal.setAttribute('aria-hidden', 'true'); };
+    closeButton?.addEventListener('click', closeModal);
+    okButton?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
+    button.addEventListener('click', async function () {
+      button.disabled = true; label?.classList.add('hidden'); loading?.classList.remove('hidden');
+      try {
+        const resp = await fetch(form.action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }, body: new FormData(form) });
+        const data = await resp.json();
+        const ok = !!data.ok;
+        deviceEl.textContent = data.device_name || '{{ device.name }}';
+        protocolEl.textContent = (data.protocol || '-').toUpperCase();
+        elapsedEl.textContent = Number.isFinite(data.elapsed_ms) ? `${data.elapsed_ms} ms` : '-';
+        statusEl.textContent = ok ? 'Conectividade validada' : 'Falha na conectividade';
+        statusEl.className = ok ? 'tag tag-good' : 'tag tag-crit';
+        messageEl.textContent = data.message || (ok ? 'Conexão validada.' : 'Falha no teste de conexão.');
+        openModal();
+      } catch (err) {
+        statusEl.textContent = 'Erro na validação';
+        statusEl.className = 'tag tag-crit';
+        messageEl.textContent = 'Não foi possível comunicar com o servidor para testar a conexão.';
+        protocolEl.textContent = '-'; elapsedEl.textContent = '-'; openModal();
+      } finally { button.disabled = false; label?.classList.remove('hidden'); loading?.classList.add('hidden'); }
+    });
+  });
+</script>
+{% endblock %}

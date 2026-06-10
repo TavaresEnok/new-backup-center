@@ -1,0 +1,67 @@
+{% extends "base_redesign.html" %}
+{% block title %}Comparar versões · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<span>Dispositivos</span><i data-lucide="chevron-right"></i><b>Comparar</b>{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/compare.py select_device): tenant, group_cards[{id,name,
+   connection_type,device_count}], selected_group_key, selected_group_name,
+   devices[{device{id,name,ip_address}, comparable_backup_count, total_backup_count}] #}
+{% set connection_labels = {'direct':'Direto','vpn':'VPN','jump_host':'Jump Host'} %}
+
+<div class="wrap">
+  <div class="page-h">
+    <div class="eyebrow">Diagnóstico seguro</div>
+    <h1>Comparar versões</h1>
+    <p>Escolha o grupo/provedor e depois o dispositivo para comparar duas versões de backup.</p>
+  </div>
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap;">
+    <div><div style="font-family:var(--serif);font-size:21px">1) Escolha o grupo/provedor</div><div class="faint" style="font-size:13px;margin-top:2px">{{ group_cards|length }} grupos disponíveis</div></div>
+  </div>
+
+  <div class="gcgrid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));margin-bottom:30px">
+    {% for group in group_cards %}
+    {% set group_href = url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, group_id=group.id, compare='1') if group.id != 'ungrouped' else url_for('tenant_compare.select_device', tenant_slug=tenant.slug, group=group.id) %}
+    {% set conn_key = 'vpn' if group.connection_type == 'vpn' else ('jump' if group.connection_type in ['jump_host','jump'] else 'direct') %}
+    <a href="{{ group_href }}" class="panel gc {% if selected_group_key == group.id %}state-active{% endif %}" style="text-decoration:none;{% if selected_group_key == group.id %}border-color:var(--pine);box-shadow:0 0 0 1px var(--pine),var(--sh-2){% endif %}">
+      <div class="gc-head">
+        <span class="gc-ic gi-{{ conn_key }}"><i data-lucide="{{ 'shield-check' if conn_key == 'vpn' else ('git-branch' if conn_key == 'jump' else 'arrow-right-left') }}"></i></span>
+        <div style="flex:1;min-width:0">
+          <div class="gc-name">{{ group.name }}</div>
+          <div class="row g2 ic wr" style="margin-top:7px">
+            <span class="tag">{{ connection_labels.get(group.connection_type, group.connection_type|capitalize) }}</span>
+            <span class="tag tag-pine">{{ group.device_count }} disp.</span>
+          </div>
+        </div>
+        <i data-lucide="chevron-right" style="width:17px;height:17px;color:var(--ink-3);flex-shrink:0"></i>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap;">
+    <div><div style="font-family:var(--serif);font-size:21px">2) Escolha o dispositivo</div>{% if selected_group_name %}<div class="faint" style="font-size:13px;margin-top:2px">Grupo: {{ selected_group_name }}</div>{% endif %}</div>
+  </div>
+
+  {% if not selected_group_key %}
+  <div class="panel"><div class="empty"><div class="empty-ic"><i data-lucide="layers"></i></div><h4>Selecione um grupo acima</h4><p>Os dispositivos do grupo aparecem aqui.</p></div></div>
+  {% else %}
+  <div class="gcgrid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+    {% for item in devices %}
+    <a href="{{ url_for('tenant_compare.compare_backups', tenant_slug=tenant.slug, device_id=item.device.id) }}"
+       class="panel gc" style="padding:18px 20px;display:flex;align-items:center;gap:14px;text-decoration:none">
+      <span style="width:44px;height:44px;border-radius:13px;display:grid;place-items:center;flex-shrink:0;background:var(--pine-soft);color:var(--pine)"><i data-lucide="server" style="width:20px;height:20px;stroke-width:1.6"></i></span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.device.name }}</div>
+        <div class="faint mono" style="font-size:12px;margin-top:3px">{{ item.device.ip_address }}</div>
+        <div class="faint" style="font-size:11.5px;margin-top:2px">{{ item.comparable_backup_count }} comparáveis · {{ item.total_backup_count }} total</div>
+      </div>
+      <i data-lucide="chevron-right" style="width:17px;height:17px;color:var(--ink-3);flex-shrink:0"></i>
+    </a>
+    {% else %}
+    <div style="grid-column:1/-1"><div class="panel"><div class="empty"><div class="empty-ic"><i data-lucide="server-off"></i></div><h4>Nenhum dispositivo comparável</h4><p>Faça ao menos dois backups para comparar versões.</p></div></div></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

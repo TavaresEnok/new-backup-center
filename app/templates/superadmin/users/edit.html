@@ -1,0 +1,89 @@
+{% extends "base_superadmin.html" %}
+
+{% block title %}Editar Usuario | Super Admin{% endblock %}
+
+{% block content %}
+{% set is_platform = not user.tenant_id %}
+<div class="admin-page admin-page--narrow admin-page--compact">
+    <div class="admin-page-header">
+        <div class="admin-page-header-copy">
+            <h1 class="admin-page-title">Editar usuario</h1>
+            <p class="admin-page-subtitle">Atualize acesso e vinculo de cliente.</p>
+        </div>
+    </div>
+
+    <form method="POST" class="premium-card admin-form-card" x-data="{ scope: '{{ 'platform' if is_platform else 'tenant' }}' }">
+        {% include 'partials/csrf.html' %}
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label class="flex items-center gap-2 rounded-lg border border-[var(--card-border)] px-3 py-2 text-sm text-[var(--text-main)]">
+                <input type="radio" name="user_scope" value="tenant" x-model="scope" class="h-4 w-4">
+                Usuario de cliente
+            </label>
+            <label class="flex items-center gap-2 rounded-lg border border-[var(--card-border)] px-3 py-2 text-sm text-[var(--text-main)]">
+                <input type="radio" name="user_scope" value="platform" x-model="scope" class="h-4 w-4">
+                Admin da plataforma
+            </label>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+                <label for="full_name" class="admin-label">Nome</label>
+                <input type="text" name="full_name" id="full_name" value="{{ user.full_name }}" required
+                    class="admin-control">
+            </div>
+            <div>
+                <label for="email" class="admin-label">E-mail</label>
+                <input type="email" name="email" id="email" value="{{ user.email }}" required
+                    class="admin-control">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+                <label for="password" class="admin-label">Nova senha (opcional)</label>
+                <input type="password" name="password" id="password" minlength="6"
+                    class="admin-control">
+            </div>
+            <div x-show="scope === 'tenant'" x-cloak>
+                <label for="role" class="admin-label">Funcao no cliente</label>
+                <select name="role" id="role"
+                    class="admin-control">
+                    {% for role in tenant_roles %}
+                    <option value="{{ role.value }}" {% if user.role == role %}selected{% endif %}>{{ role_labels[role] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div x-show="scope === 'tenant'" x-cloak>
+            <label for="tenant_id" class="admin-label">Cliente</label>
+            <select name="tenant_id" id="tenant_id"
+                class="admin-control">
+                <option value="">Selecione...</option>
+                {% for tenant in tenant_options %}
+                <option value="{{ tenant.id }}" {% if selected_tenant_id and tenant.id == selected_tenant_id %}selected{% endif %}>
+                    {{ tenant.name }} ({{ tenant.slug }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <label class="admin-toggle-card">
+            <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %} class="h-4 w-4 rounded border-[var(--card-border)]">
+            Usuario ativo
+        </label>
+
+        <div class="admin-form-actions">
+            <a href="{{ url_for('superadmin_users.list_users') }}"
+                class="rounded-lg border border-[var(--card-border)] px-4 py-2 text-sm font-medium text-[var(--text-main)] hover:bg-[var(--line-color)]">
+                Cancelar
+            </a>
+            <button type="submit"
+                class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+                Salvar alteracoes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro | Backup Center</title>
+
+    <link href="{{ url_for('static', filename='css/redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/auth_redesign.css') }}?v=20260608-uifix" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+
+<body>
+    {% set default_plan = (plans[0].id|string) if plans else '' %}
+    <main class="auth-page">
+        <div class="auth-shell" x-data="{ selectedPlan: '{{ default_plan }}', billingCycle: 'monthly' }">
+            <div class="auth-register-grid">
+                <section class="auth-form-panel">
+                    <div class="auth-actions auth-actions-between">
+                        <div class="auth-brand">
+                            <div class="brand-mark">
+                                <i data-lucide="layers-3"></i>
+                            </div>
+                            <div class="auth-brand-copy">
+                                <strong>Backup Center</strong>
+                                <span>SaaS para operacao de rede</span>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-line btn-sm">
+                            <i data-lucide="log-in"></i>
+                            Ja tenho conta
+                        </a>
+                    </div>
+
+                    <header class="auth-head">
+                        <p class="eyebrow">Novo cliente</p>
+                        <h1>Criar conta</h1>
+                        <p>Preencha os dados do responsavel, da empresa e escolha o plano inicial.</p>
+                    </header>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    <div class="auth-flashes">
+                        {% for category, message in messages %}
+                        <div class="auth-flash {% if category == 'success' %}is-success{% elif category == 'warning' %}is-warning{% elif category == 'info' %}is-info{% elif category == 'danger' %}is-danger{% else %}is-error{% endif %}">
+                            {{ message }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+
+                    {% if not payment_ready %}
+                    <div class="auth-alert auth-alert-care">
+                        Checkout online temporariamente indisponivel. O cliente ainda pode ser criado e pagar depois.
+                    </div>
+                    {% endif %}
+
+                    <form id="signup-form" action="{{ url_for('auth.register') }}" method="POST" class="auth-form">
+                        {% include 'partials/csrf.html' %}
+                        <input type="hidden" name="plan_id" :value="selectedPlan">
+
+                        <div class="auth-form-grid">
+                            <div class="auth-field-group">
+                                <label for="full_name" class="auth-label">Nome completo</label>
+                                <div class="field auth-field">
+                                    <i data-lucide="user"></i>
+                                    <input id="full_name" name="full_name" type="text" required placeholder="Seu nome completo">
+                                </div>
+                            </div>
+                            <div class="auth-field-group">
+                                <label for="email" class="auth-label">E-mail</label>
+                                <div class="field auth-field">
+                                    <i data-lucide="mail"></i>
+                                    <input id="email" name="email" type="email" required placeholder="voce@empresa.com" autocomplete="email">
+                                </div>
+                            </div>
+                            <div class="auth-field-group auth-span-2">
+                                <label for="company_name" class="auth-label">Empresa</label>
+                                <div class="field auth-field">
+                                    <i data-lucide="building-2"></i>
+                                    <input id="company_name" name="company_name" type="text" required placeholder="Nome da empresa ou provedor">
+                                </div>
+                            </div>
+                            <div class="auth-field-group auth-span-2">
+                                <label for="password" class="auth-label">Senha</label>
+                                <div class="field auth-field">
+                                    <i data-lucide="lock"></i>
+                                    <input id="password" name="password" type="password" minlength="8" required placeholder="Minimo de 8 caracteres" autocomplete="new-password">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="auth-field-group">
+                            <label class="auth-label">Ciclo de cobranca</label>
+                            <div class="auth-cycle-grid">
+                                <label class="auth-cycle-pill" :class="{ 'is-active': billingCycle === 'monthly' }">
+                                    <input type="radio" name="billing_cycle" value="monthly" class="sr-only" checked @change="billingCycle = 'monthly'">
+                                    <div class="auth-cycle-pill-inner">
+                                        <div class="auth-cycle-copy">
+                                            <strong>Mensal</strong>
+                                            <span>Entrada mais simples</span>
+                                        </div>
+                                        <i data-lucide="calendar-range"></i>
+                                    </div>
+                                </label>
+                                <label class="auth-cycle-pill" :class="{ 'is-active': billingCycle === 'yearly' }">
+                                    <input type="radio" name="billing_cycle" value="yearly" class="sr-only" @change="billingCycle = 'yearly'">
+                                    <div class="auth-cycle-pill-inner">
+                                        <div class="auth-cycle-copy">
+                                            <strong>Anual</strong>
+                                            <span>Melhor para contrato recorrente</span>
+                                        </div>
+                                        <i data-lucide="badge-percent"></i>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-pine btn-full">
+                            <i data-lucide="arrow-right"></i>
+                            Criar conta e continuar
+                        </button>
+                    </form>
+                </section>
+
+                <aside class="auth-plans-panel">
+                    <header class="auth-head">
+                        <p class="eyebrow">Plano inicial</p>
+                        <h2>Escolha seu plano</h2>
+                        <p>Selecione o pacote que melhor se encaixa no cliente.</p>
+                    </header>
+
+                    {% if plans %}
+                    <div class="auth-plan-list">
+                        {% for plan in plans %}
+                        {% set plan_id = plan.id|string %}
+                        <label class="auth-plan-option" :class="{ 'is-active': selectedPlan === '{{ plan_id }}' }">
+                            <input type="radio" value="{{ plan.id }}" class="sr-only" {% if loop.first %}checked{% endif %} @change="selectedPlan = '{{ plan_id }}'">
+                            <input type="hidden" x-ref="monthlyPrice{{ loop.index }}" value="{{ '%.2f'|format((plan.price_monthly or 0) / 100) }}">
+                            <input type="hidden" x-ref="yearlyPrice{{ loop.index }}" value="{{ '%.2f'|format((plan.price_yearly or 0) / 100) }}">
+
+                            <div class="auth-plan-top">
+                                <div>
+                                    <strong>{{ plan.name }}</strong>
+                                    <p>{{ plan.description or 'Plano comercial do Backup Center.' }}</p>
+                                </div>
+                                <span class="tag tag-pine">{{ plan.max_devices }} disp.</span>
+                            </div>
+
+                            <div class="auth-plan-price-row">
+                                <div>
+                                    <div class="auth-plan-price">
+                                        <span x-text="billingCycle === 'yearly' ? 'R$ ' + $refs.yearlyPrice{{ loop.index }}.value : 'R$ ' + $refs.monthlyPrice{{ loop.index }}.value"></span>
+                                    </div>
+                                    <p x-text="billingCycle === 'yearly' ? 'anual' : 'mensal'"></p>
+                                </div>
+                                <div class="auth-plan-meta">
+                                    <div>{{ plan.max_users }} usuarios</div>
+                                    <div>{{ plan.backup_retention_days }} dias retencao</div>
+                                </div>
+                            </div>
+
+                            <div class="auth-plan-specs">
+                                <div class="auth-plan-spec">
+                                    <span>Dispositivos</span>
+                                    <strong>{{ plan.max_devices }}</strong>
+                                </div>
+                                <div class="auth-plan-spec">
+                                    <span>Usuarios</span>
+                                    <strong>{{ plan.max_users }}</strong>
+                                </div>
+                                <div class="auth-plan-spec">
+                                    <span>Storage</span>
+                                    <strong>
+                                        {% if (plan.storage_quota_gb or 0) > 0 %}
+                                        {{ plan.storage_quota_gb }} GB
+                                        {% else %}
+                                        Ilimitado
+                                        {% endif %}
+                                    </strong>
+                                </div>
+                                <div class="auth-plan-spec">
+                                    <span>Download/mes</span>
+                                    <strong>
+                                        {% if (plan.download_quota_gb_month or 0) > 0 %}
+                                        {{ plan.download_quota_gb_month }} GB
+                                        {% else %}
+                                        Ilimitado
+                                        {% endif %}
+                                    </strong>
+                                </div>
+                                <div class="auth-plan-spec">
+                                    <span>Retencao</span>
+                                    <strong>{{ plan.backup_retention_days }} dias</strong>
+                                </div>
+                                <div class="auth-plan-spec">
+                                    <span>Velocidade</span>
+                                    <strong>
+                                        {% if (plan.max_download_rate_mbps or 0) > 0 %}
+                                        {{ plan.max_download_rate_mbps }} Mbps
+                                        {% else %}
+                                        Ilimitada
+                                        {% endif %}
+                                    </strong>
+                                </div>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="auth-flash is-error">
+                        Nenhum plano ativo disponivel no momento.
+                    </div>
+                    {% endif %}
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

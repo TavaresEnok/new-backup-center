@@ -1,0 +1,510 @@
+# Requer ficheiro .env (ver .env.example). Não commite segredos.
+# JUMP_HOST_SLOTS_OVERRIDES e FLOWER_BASIC_AUTH vêm do .env em produção.
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: backup_sys_db
+    command: >
+      postgres
+      -c idle_in_transaction_session_timeout=${PG_IDLE_IN_TX_TIMEOUT_MS:-60000}
+      -c lock_timeout=${PG_LOCK_TIMEOUT_MS:-5000}
+      -c deadlock_timeout=${PG_DEADLOCK_TIMEOUT_MS:-1000}
+      -c max_connections=${PG_MAX_CONNECTIONS:-250}
+      -c shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-2048MB}
+      -c work_mem=${PG_WORK_MEM:-8MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
+      -c wal_compression=on
+      -c checkpoint_completion_target=0.9
+      -c max_wal_size=${PG_MAX_WAL_SIZE:-1GB}
+      -c min_wal_size=${PG_MIN_WAL_SIZE:-80MB}
+    environment:
+      POSTGRES_DB: backup_center
+      POSTGRES_USER: backup_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U backup_user -d backup_center"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backup_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: backup_sys_redis
+    command: >
+      redis-server
+      --appendonly ${REDIS_APPENDONLY:-no}
+      --save ${REDIS_SAVE_SEC_1:-3600} ${REDIS_SAVE_CHG_1:-1}
+      --save ${REDIS_SAVE_SEC_2:-300} ${REDIS_SAVE_CHG_2:-100000}
+      --save ${REDIS_SAVE_SEC_3:-60} ${REDIS_SAVE_CHG_3:-1000000}
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory ${REDIS_MAXMEMORY:-0}
+      --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-noeviction}
+      --tcp-backlog ${REDIS_TCP_BACKLOG:-511}
+      --timeout ${REDIS_CLIENT_TIMEOUT_SECONDS:-0}
+      --hz ${REDIS_HZ:-10}
+      --active-expire-effort ${REDIS_ACTIVE_EXPIRE_EFFORT:-1}
+    volumes:
+      - ./redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backup_net
+
+  app:
+    build: .
+    container_name: backup_sys_app
+    command: >
+      sh -lc "exec gunicorn main:app
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers ${APP_WEB_WORKERS:-6}
+      --max-requests ${APP_WEB_MAX_REQUESTS:-1500}
+      --max-requests-jitter ${APP_WEB_MAX_REQUESTS_JITTER:-150}
+      --timeout ${APP_WEB_TIMEOUT_SECONDS:-120}
+      --graceful-timeout ${APP_WEB_GRACEFUL_TIMEOUT_SECONDS:-30}
+      --keep-alive ${APP_WEB_KEEPALIVE_SECONDS:-10}"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://backup_user:${DB_PASSWORD_URLENC}@db:5432/backup_center
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DEBUG=0
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/Recife}
+      - TZ=${APP_TIMEZONE:-America/Recife}
+      - CELERY_METRICS_INSPECT_ENABLED=${APP_CELERY_METRICS_INSPECT_ENABLED:-0}
+      - BACKUP_METRICS_CACHE_SECONDS=${BACKUP_METRICS_CACHE_SECONDS:-60}
+      - APP_WEB_WORKERS=${APP_WEB_WORKERS:-6}
+      - APP_WEB_MAX_REQUESTS=${APP_WEB_MAX_REQUESTS:-1500}
+      - APP_WEB_MAX_REQUESTS_JITTER=${APP_WEB_MAX_REQUESTS_JITTER:-150}
+      - APP_WEB_TIMEOUT_SECONDS=${APP_WEB_TIMEOUT_SECONDS:-120}
+      - APP_WEB_GRACEFUL_TIMEOUT_SECONDS=${APP_WEB_GRACEFUL_TIMEOUT_SECONDS:-30}
+      - APP_WEB_KEEPALIVE_SECONDS=${APP_WEB_KEEPALIVE_SECONDS:-10}
+      - BULK_PREFLIGHT_AUTO_AUDIT=${BULK_PREFLIGHT_AUTO_AUDIT:-1}
+      - BULK_PREFLIGHT_AUTO_AUDIT_LIMIT=${BULK_PREFLIGHT_AUTO_AUDIT_LIMIT:-120}
+      - BULK_PREFLIGHT_MAX_AGE_MINUTES=${BULK_PREFLIGHT_MAX_AGE_MINUTES:-45}
+      - BACKUP_NETWORK_PRECHECK_ENABLED=${BACKUP_NETWORK_PRECHECK_ENABLED:-1}
+      - BACKUP_NETWORK_PRECHECK_FAIL_FAST=${BACKUP_NETWORK_PRECHECK_FAIL_FAST:-1}
+      - BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS:-2}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES=${BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES:-1}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS:-4}
+      - BACKUP_NETWORK_PRECHECK_SKIP_FOR_JUMP=${BACKUP_NETWORK_PRECHECK_SKIP_FOR_JUMP:-0}
+      - BACKUP_SSH_STRICT_HOST_KEY_CHECKING=${BACKUP_SSH_STRICT_HOST_KEY_CHECKING:-0}
+      - BACKUP_TASK_SOFT_TIME_LIMIT_SECONDS=${BACKUP_TASK_SOFT_TIME_LIMIT_SECONDS:-480}
+      - BACKUP_TASK_TIME_LIMIT_SECONDS=${BACKUP_TASK_TIME_LIMIT_SECONDS:-540}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES=${BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES:-FLASHNET - SW CORE-CABO_S.A.}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_IDS=${BACKUP_TRANSIENT_RETRY_DENYLIST_IDS:-}
+      - JUMP_HOST_SHELL_RETRIES=${JUMP_HOST_SHELL_RETRIES:-4}
+      - JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS=${JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS:-12}
+      - JUMP_HOST_CONNECT_RETRIES=${JUMP_HOST_CONNECT_RETRIES:-3}
+      - JUMP_HOST_CHANNEL_RETRIES=${JUMP_HOST_CHANNEL_RETRIES:-2}
+      - JUMP_PHASE_GROUP_STAGGER_SECONDS=${JUMP_PHASE_GROUP_STAGGER_SECONDS:-2}
+      - JUMP_BULK_BASTION_STAGGER_SECONDS=${JUMP_BULK_BASTION_STAGGER_SECONDS:-5}
+      - JUMP_HOST_WINDOW_ADAPTIVE_ENABLED=${JUMP_HOST_WINDOW_ADAPTIVE_ENABLED:-1}
+      - JUMP_HOST_WINDOW_SECONDS=${JUMP_HOST_WINDOW_SECONDS:-1800}
+      - JUMP_HOST_WINDOW_MIN_SAMPLES=${JUMP_HOST_WINDOW_MIN_SAMPLES:-3}
+      - JUMP_HOST_WINDOW_MIN_SLOTS=${JUMP_HOST_WINDOW_MIN_SLOTS:-2}
+      - JUMP_HOST_DURATION_EMA_ALPHA_PERCENT=${JUMP_HOST_DURATION_EMA_ALPHA_PERCENT:-25}
+      - CB_OPEN_MAX_RETRIES=${CB_OPEN_MAX_RETRIES:-1}
+      - CB_OPEN_RETRY_BUFFER_SECONDS=${CB_OPEN_RETRY_BUFFER_SECONDS:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK=${JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS=${JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS:-900}
+      - JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE=${JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE:-1}
+      - BACKUP_MIKROTIK_DISABLE_JUMP_HOST=${BACKUP_MIKROTIK_DISABLE_JUMP_HOST:-1}
+      - BACKUP_MIKROTIK_PREFER_VPN=${BACKUP_MIKROTIK_PREFER_VPN:-1}
+      - VPN_GLOBAL_LOCK_TIMEOUT_SECONDS=${VPN_GLOBAL_LOCK_TIMEOUT_SECONDS:-3600}
+      - BACKUP_OTEL_ENABLED=${BACKUP_OTEL_ENABLED:-1}
+      - BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT=${BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318/v1/traces}
+      - BACKUP_OTEL_SERVICE_NAME=${BACKUP_OTEL_SERVICE_NAME_APP:-backup-center-app}
+      - BULK_ACTIVE_STALE_SECONDS=${BULK_ACTIVE_STALE_SECONDS:-1800}
+      - CELERY_RESULT_EXPIRES_SECONDS=${CELERY_RESULT_EXPIRES_SECONDS:-86400}
+    volumes:
+      - ./storage:/app/storage
+      - ./app:/app/app
+    ports:
+      - "5000:8000"
+      - "8050:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  celery:
+    build: .
+    container_name: backup_sys_celery
+    command: celery -A app.celery_app worker -E -l info -Q celery --concurrency=${CELERY_WORKER_CONCURRENCY:-4} --prefetch-multiplier=1 --max-tasks-per-child=20
+    environment:
+      - DATABASE_URL=postgresql://backup_user:${DB_PASSWORD_URLENC}@db:5432/backup_center
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DEBUG=0
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/Recife}
+      - TZ=${APP_TIMEZONE:-America/Recife}
+      - JUMP_HOST_MAX_SLOTS=${JUMP_HOST_MAX_SLOTS:-4}
+      - JUMP_HOST_SLOTS_OVERRIDES=${JUMP_HOST_SLOTS_OVERRIDES:-default=3}
+      - JUMP_HOST_SLOT_WAIT_SECONDS=240
+      - JUMP_HOST_SLOT_WAIT_SECONDS_LARGE_BULK=${JUMP_HOST_SLOT_WAIT_SECONDS_LARGE_BULK:-900}
+      - JUMP_HOST_SLOT_TTL_SECONDS=${JUMP_HOST_SLOT_TTL_SECONDS:-660}
+      - JUMP_HOST_ADAPTIVE_ENABLED=${JUMP_HOST_ADAPTIVE_ENABLED:-1}
+      - BULK_TRANSIENT_RETRY_THRESHOLD=${BULK_TRANSIENT_RETRY_THRESHOLD:-300}
+      - BULK_TRANSIENT_MAX_RETRIES=${BULK_TRANSIENT_MAX_RETRIES:-1}
+      - BULK_ACTIVE_STALE_SECONDS=${BULK_ACTIVE_STALE_SECONDS:-1800}
+      - CELERY_RESULT_EXPIRES_SECONDS=${CELERY_RESULT_EXPIRES_SECONDS:-86400}
+      - BACKUP_NETWORK_PRECHECK_ENABLED=${BACKUP_NETWORK_PRECHECK_ENABLED:-1}
+      - BACKUP_NETWORK_PRECHECK_FAIL_FAST=${BACKUP_NETWORK_PRECHECK_FAIL_FAST:-1}
+      - BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS:-2}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES=${BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES:-1}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS:-4}
+      - BACKUP_NETWORK_PRECHECK_SKIP_FOR_JUMP=${BACKUP_NETWORK_PRECHECK_SKIP_FOR_JUMP:-0}
+      - BACKUP_SSH_STRICT_HOST_KEY_CHECKING=${BACKUP_SSH_STRICT_HOST_KEY_CHECKING:-0}
+      - BACKUP_TASK_SOFT_TIME_LIMIT_SECONDS=${BACKUP_TASK_SOFT_TIME_LIMIT_SECONDS:-480}
+      - BACKUP_TASK_TIME_LIMIT_SECONDS=${BACKUP_TASK_TIME_LIMIT_SECONDS:-540}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES=${BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES:-FLASHNET - SW CORE-CABO_S.A.}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_IDS=${BACKUP_TRANSIENT_RETRY_DENYLIST_IDS:-}
+      - JUMP_HOST_SHELL_RETRIES=${JUMP_HOST_SHELL_RETRIES:-4}
+      - JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS=${JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS:-12}
+      - JUMP_HOST_CONNECT_RETRIES=${JUMP_HOST_CONNECT_RETRIES:-3}
+      - JUMP_HOST_CHANNEL_RETRIES=${JUMP_HOST_CHANNEL_RETRIES:-2}
+      - JUMP_PHASE_GROUP_STAGGER_SECONDS=${JUMP_PHASE_GROUP_STAGGER_SECONDS:-2}
+      - JUMP_BULK_BASTION_STAGGER_SECONDS=${JUMP_BULK_BASTION_STAGGER_SECONDS:-5}
+      - JUMP_HOST_WINDOW_ADAPTIVE_ENABLED=${JUMP_HOST_WINDOW_ADAPTIVE_ENABLED:-1}
+      - JUMP_HOST_WINDOW_SECONDS=${JUMP_HOST_WINDOW_SECONDS:-1800}
+      - JUMP_HOST_WINDOW_MIN_SAMPLES=${JUMP_HOST_WINDOW_MIN_SAMPLES:-3}
+      - JUMP_HOST_WINDOW_MIN_SLOTS=${JUMP_HOST_WINDOW_MIN_SLOTS:-2}
+      - JUMP_HOST_DURATION_EMA_ALPHA_PERCENT=${JUMP_HOST_DURATION_EMA_ALPHA_PERCENT:-25}
+      - CB_OPEN_MAX_RETRIES=${CB_OPEN_MAX_RETRIES:-1}
+      - CB_OPEN_RETRY_BUFFER_SECONDS=${CB_OPEN_RETRY_BUFFER_SECONDS:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK=${JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS=${JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS:-900}
+      - JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE=${JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE:-1}
+      - BACKUP_MIKROTIK_DISABLE_JUMP_HOST=${BACKUP_MIKROTIK_DISABLE_JUMP_HOST:-1}
+      - BACKUP_MIKROTIK_PREFER_VPN=${BACKUP_MIKROTIK_PREFER_VPN:-1}
+      - VPN_GLOBAL_LOCK_TIMEOUT_SECONDS=${VPN_GLOBAL_LOCK_TIMEOUT_SECONDS:-3600}
+      - CB_THRESHOLD_PERCENT=85
+      - CB_MIN_SAMPLES=20
+      - CB_OPEN_SECONDS=20
+      - BACKUP_OTEL_ENABLED=${BACKUP_OTEL_ENABLED:-1}
+      - BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT=${BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318/v1/traces}
+      - BACKUP_OTEL_SERVICE_NAME=${BACKUP_OTEL_SERVICE_NAME_CELERY:-backup-center-celery}
+    volumes:
+      - ./storage:/app/storage
+      - ./app:/app/app
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  celery_jump:
+    build: .
+    container_name: backup_sys_celery_jump
+    command: celery -A app.celery_app worker -E -l info -Q jump_queue --concurrency=${CELERY_JUMP_WORKER_CONCURRENCY:-8} --prefetch-multiplier=1 --max-tasks-per-child=20
+    environment:
+      - DATABASE_URL=postgresql://backup_user:${DB_PASSWORD_URLENC}@db:5432/backup_center
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DEBUG=0
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/Recife}
+      - TZ=${APP_TIMEZONE:-America/Recife}
+      - JUMP_HOST_MAX_SLOTS=${JUMP_HOST_MAX_SLOTS:-4}
+      - JUMP_HOST_SLOTS_OVERRIDES=${JUMP_HOST_SLOTS_OVERRIDES:-default=3}
+      - JUMP_HOST_SLOT_WAIT_SECONDS=240
+      - JUMP_HOST_SLOT_WAIT_SECONDS_LARGE_BULK=${JUMP_HOST_SLOT_WAIT_SECONDS_LARGE_BULK:-900}
+      - JUMP_HOST_SLOT_TTL_SECONDS=${JUMP_HOST_SLOT_TTL_SECONDS:-660}
+      - JUMP_HOST_ADAPTIVE_ENABLED=${JUMP_HOST_ADAPTIVE_ENABLED:-1}
+      - BULK_TRANSIENT_RETRY_THRESHOLD=${BULK_TRANSIENT_RETRY_THRESHOLD:-300}
+      - BULK_TRANSIENT_MAX_RETRIES=${BULK_TRANSIENT_MAX_RETRIES:-1}
+      - BULK_ACTIVE_STALE_SECONDS=${BULK_ACTIVE_STALE_SECONDS:-1800}
+      - CELERY_RESULT_EXPIRES_SECONDS=${CELERY_RESULT_EXPIRES_SECONDS:-86400}
+      - BACKUP_NETWORK_PRECHECK_ENABLED=${BACKUP_NETWORK_PRECHECK_ENABLED:-1}
+      - BACKUP_NETWORK_PRECHECK_FAIL_FAST=${BACKUP_NETWORK_PRECHECK_FAIL_FAST:-1}
+      - BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS:-2}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES=${BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES:-1}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS:-4}
+      - BACKUP_NETWORK_PRECHECK_SKIP_FOR_JUMP=${BACKUP_NETWORK_PRECHECK_SKIP_FOR_JUMP:-0}
+      - BACKUP_SSH_STRICT_HOST_KEY_CHECKING=${BACKUP_SSH_STRICT_HOST_KEY_CHECKING:-0}
+      - BACKUP_TASK_SOFT_TIME_LIMIT_SECONDS=${BACKUP_TASK_SOFT_TIME_LIMIT_SECONDS:-480}
+      - BACKUP_TASK_TIME_LIMIT_SECONDS=${BACKUP_TASK_TIME_LIMIT_SECONDS:-540}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES=${BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES:-FLASHNET - SW CORE-CABO_S.A.}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_IDS=${BACKUP_TRANSIENT_RETRY_DENYLIST_IDS:-}
+      - JUMP_HOST_SHELL_RETRIES=${JUMP_HOST_SHELL_RETRIES:-4}
+      - JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS=${JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS:-12}
+      - JUMP_HOST_CONNECT_RETRIES=${JUMP_HOST_CONNECT_RETRIES:-3}
+      - JUMP_HOST_CHANNEL_RETRIES=${JUMP_HOST_CHANNEL_RETRIES:-2}
+      - JUMP_PHASE_GROUP_STAGGER_SECONDS=${JUMP_PHASE_GROUP_STAGGER_SECONDS:-2}
+      - JUMP_BULK_BASTION_STAGGER_SECONDS=${JUMP_BULK_BASTION_STAGGER_SECONDS:-5}
+      - JUMP_HOST_WINDOW_ADAPTIVE_ENABLED=${JUMP_HOST_WINDOW_ADAPTIVE_ENABLED:-1}
+      - JUMP_HOST_WINDOW_SECONDS=${JUMP_HOST_WINDOW_SECONDS:-1800}
+      - JUMP_HOST_WINDOW_MIN_SAMPLES=${JUMP_HOST_WINDOW_MIN_SAMPLES:-3}
+      - JUMP_HOST_WINDOW_MIN_SLOTS=${JUMP_HOST_WINDOW_MIN_SLOTS:-2}
+      - JUMP_HOST_DURATION_EMA_ALPHA_PERCENT=${JUMP_HOST_DURATION_EMA_ALPHA_PERCENT:-25}
+      - CB_OPEN_MAX_RETRIES=${CB_OPEN_MAX_RETRIES:-1}
+      - CB_OPEN_RETRY_BUFFER_SECONDS=${CB_OPEN_RETRY_BUFFER_SECONDS:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK=${JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS=${JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS:-900}
+      - JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE=${JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE:-1}
+      - BACKUP_MIKROTIK_DISABLE_JUMP_HOST=${BACKUP_MIKROTIK_DISABLE_JUMP_HOST:-1}
+      - BACKUP_MIKROTIK_PREFER_VPN=${BACKUP_MIKROTIK_PREFER_VPN:-1}
+      - VPN_GLOBAL_LOCK_TIMEOUT_SECONDS=${VPN_GLOBAL_LOCK_TIMEOUT_SECONDS:-3600}
+      - CB_THRESHOLD_PERCENT=85
+      - CB_MIN_SAMPLES=20
+      - CB_OPEN_SECONDS=20
+      - BACKUP_OTEL_ENABLED=${BACKUP_OTEL_ENABLED:-1}
+      - BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT=${BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318/v1/traces}
+      - BACKUP_OTEL_SERVICE_NAME=${BACKUP_OTEL_SERVICE_NAME_JUMP:-backup-center-celery-jump}
+    volumes:
+      - ./storage:/app/storage
+      - ./app:/app/app
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  celery_vpn:
+    build: .
+    init: true
+    command: /app/scripts/start_vpn_worker_isolated.sh
+    scale: 8
+    environment:
+      - DATABASE_URL=postgresql://backup_user:${DB_PASSWORD_URLENC}@db:5432/backup_center
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DEBUG=0
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/Recife}
+      - TZ=${APP_TIMEZONE:-America/Recife}
+      - VPN_ISOLATED_WORKER=1
+      - CELERY_VPN_WORKER_CONCURRENCY=${CELERY_VPN_WORKER_CONCURRENCY:-1}
+      - CELERY_VPN_MAX_TASKS_PER_CHILD=${CELERY_VPN_MAX_TASKS_PER_CHILD:-1}
+      - JUMP_HOST_MAX_SLOTS=${JUMP_HOST_MAX_SLOTS:-4}
+      - JUMP_HOST_SLOTS_OVERRIDES=${JUMP_HOST_SLOTS_OVERRIDES:-default=3}
+      - JUMP_HOST_SLOT_WAIT_SECONDS=240
+      - JUMP_HOST_SLOT_WAIT_SECONDS_LARGE_BULK=${JUMP_HOST_SLOT_WAIT_SECONDS_LARGE_BULK:-900}
+      - JUMP_HOST_SLOT_TTL_SECONDS=${JUMP_HOST_SLOT_TTL_SECONDS:-660}
+      - JUMP_HOST_ADAPTIVE_ENABLED=${JUMP_HOST_ADAPTIVE_ENABLED:-1}
+      - BULK_TRANSIENT_RETRY_THRESHOLD=${BULK_TRANSIENT_RETRY_THRESHOLD:-300}
+      - BULK_TRANSIENT_MAX_RETRIES=${BULK_TRANSIENT_MAX_RETRIES:-1}
+      - BULK_ACTIVE_STALE_SECONDS=${BULK_ACTIVE_STALE_SECONDS:-1800}
+      - CELERY_RESULT_EXPIRES_SECONDS=${CELERY_RESULT_EXPIRES_SECONDS:-86400}
+      - BACKUP_NETWORK_PRECHECK_ENABLED=${BACKUP_NETWORK_PRECHECK_ENABLED:-1}
+      - BACKUP_NETWORK_PRECHECK_FAIL_FAST=${BACKUP_NETWORK_PRECHECK_FAIL_FAST:-1}
+      - BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_TIMEOUT_SECONDS:-2}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES=${BACKUP_NETWORK_PRECHECK_CONFIRM_RETRIES:-1}
+      - BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS=${BACKUP_NETWORK_PRECHECK_CONFIRM_TIMEOUT_SECONDS:-4}
+      - BACKUP_SSH_STRICT_HOST_KEY_CHECKING=${BACKUP_SSH_STRICT_HOST_KEY_CHECKING:-0}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES=${BACKUP_TRANSIENT_RETRY_DENYLIST_NAMES:-FLASHNET - SW CORE-CABO_S.A.}
+      - BACKUP_TRANSIENT_RETRY_DENYLIST_IDS=${BACKUP_TRANSIENT_RETRY_DENYLIST_IDS:-}
+      - JUMP_HOST_SHELL_RETRIES=${JUMP_HOST_SHELL_RETRIES:-4}
+      - JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS=${JUMP_HOST_SHELL_PROBE_TIMEOUT_SECONDS:-12}
+      - JUMP_HOST_CONNECT_RETRIES=${JUMP_HOST_CONNECT_RETRIES:-3}
+      - JUMP_HOST_CHANNEL_RETRIES=${JUMP_HOST_CHANNEL_RETRIES:-2}
+      - JUMP_PHASE_GROUP_STAGGER_SECONDS=${JUMP_PHASE_GROUP_STAGGER_SECONDS:-2}
+      - JUMP_BULK_BASTION_STAGGER_SECONDS=${JUMP_BULK_BASTION_STAGGER_SECONDS:-5}
+      - JUMP_HOST_WINDOW_ADAPTIVE_ENABLED=${JUMP_HOST_WINDOW_ADAPTIVE_ENABLED:-1}
+      - JUMP_HOST_WINDOW_SECONDS=${JUMP_HOST_WINDOW_SECONDS:-1800}
+      - JUMP_HOST_WINDOW_MIN_SAMPLES=${JUMP_HOST_WINDOW_MIN_SAMPLES:-3}
+      - JUMP_HOST_WINDOW_MIN_SLOTS=${JUMP_HOST_WINDOW_MIN_SLOTS:-2}
+      - JUMP_HOST_DURATION_EMA_ALPHA_PERCENT=${JUMP_HOST_DURATION_EMA_ALPHA_PERCENT:-25}
+      - VPN_CONNECT_RETRIES=${VPN_CONNECT_RETRIES:-4}
+      - VPN_CONNECT_RETRY_BACKOFF_SECONDS=${VPN_CONNECT_RETRY_BACKOFF_SECONDS:-10}
+      - VPN_RESET_BACKEND_ON_CONNECT_FAILURE=${VPN_RESET_BACKEND_ON_CONNECT_FAILURE:-1}
+      - VPN_RESTART_NETWORKMANAGER_ON_CONNECT_FAILURE=${VPN_RESTART_NETWORKMANAGER_ON_CONNECT_FAILURE:-1}
+      - VPN_RECYCLE_WORKER_AFTER_CONNECT_FAILURE=${VPN_RECYCLE_WORKER_AFTER_CONNECT_FAILURE:-0}
+      - VPN_WORKER_RECYCLE_DELAY_SECONDS=${VPN_WORKER_RECYCLE_DELAY_SECONDS:-10}
+      - CB_OPEN_MAX_RETRIES=${CB_OPEN_MAX_RETRIES:-1}
+      - CB_OPEN_RETRY_BUFFER_SECONDS=${CB_OPEN_RETRY_BUFFER_SECONDS:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK=${JUMP_HOST_ADAPTIVE_SEVERE_FAIL_STREAK:-2}
+      - JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS=${JUMP_HOST_ADAPTIVE_SEVERE_COOLDOWN_SECONDS:-900}
+      - JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE=${JUMP_HOST_ADAPTIVE_SEVERE_DROP_TO_ONE:-1}
+      - BACKUP_MIKROTIK_DISABLE_JUMP_HOST=${BACKUP_MIKROTIK_DISABLE_JUMP_HOST:-1}
+      - BACKUP_MIKROTIK_PREFER_VPN=${BACKUP_MIKROTIK_PREFER_VPN:-1}
+      - VPN_GLOBAL_LOCK_TIMEOUT_SECONDS=${VPN_GLOBAL_LOCK_TIMEOUT_SECONDS:-3600}
+      - CB_THRESHOLD_PERCENT=85
+      - CB_MIN_SAMPLES=20
+      - CB_OPEN_SECONDS=20
+      - BACKUP_OTEL_ENABLED=${BACKUP_OTEL_ENABLED:-1}
+      - BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT=${BACKUP_OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4318/v1/traces}
+      - BACKUP_OTEL_SERVICE_NAME=${BACKUP_OTEL_SERVICE_NAME_VPN:-backup-center-celery-vpn}
+    volumes:
+      - ./storage:/app/storage
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+    devices:
+      - /dev/net/tun:/dev/net/tun
+      - /dev/ppp:/dev/ppp
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  flower:
+    build: .
+    container_name: backup_sys_flower
+    env_file:
+      - .env
+    command: celery -A app.celery_app flower --address=0.0.0.0 --port=5555 --persistent=False
+    environment:
+      - DATABASE_URL=postgresql://backup_user:${DB_PASSWORD_URLENC}@db:5432/backup_center
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/Recife}
+      - TZ=${APP_TIMEZONE:-America/Recife}
+      - BULK_ACTIVE_STALE_SECONDS=${BULK_ACTIVE_STALE_SECONDS:-1800}
+      - CELERY_RESULT_EXPIRES_SECONDS=${CELERY_RESULT_EXPIRES_SECONDS:-86400}
+      # API do Flower sem auth é perigosa em produção; use FLOWER_BASIC_AUTH no .env
+      - FLOWER_UNAUTHENTICATED_API=false
+      # Defina no .env; valor abaixo só para arranque local sem .env (troque em produção).
+      - FLOWER_BASIC_AUTH=${FLOWER_BASIC_AUTH:-local-dev:change-me}
+    ports:
+      # Liga só em localhost por defeito; use túnel SSH ou ajuste se precisar de acesso remoto.
+      - "127.0.0.1:5555:5555"
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  celery_beat:
+    build: .
+    container_name: backup_sys_celery_beat
+    command: celery -A app.celery_app beat -l info
+    environment:
+      - DATABASE_URL=postgresql://backup_user:${DB_PASSWORD_URLENC}@db:5432/backup_center
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DEBUG=0
+      - APP_TIMEZONE=${APP_TIMEZONE:-America/Recife}
+      - TZ=${APP_TIMEZONE:-America/Recife}
+      - CELERY_BEAT_SCHEDULED_BACKUPS_SECONDS=${CELERY_BEAT_SCHEDULED_BACKUPS_SECONDS:-300}
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: backup_sys_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./docker/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./storage/observability/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - app
+      - flower
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: backup_sys_loki
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./docker/observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./storage/observability/loki:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: backup_sys_promtail
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./docker/observability/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./storage/observability/promtail:/tmp
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: backup_sys_tempo
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./docker/observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - ./storage/observability/tempo:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4318:4318"
+      - "4317:4317"
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+  grafana_obs:
+    image: grafana/grafana:11.1.4
+    container_name: backup_sys_grafana_obs
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_OBS_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_OBS_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_OBS_ANON_ENABLED:-true}
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=${GRAFANA_OBS_ANON_ROLE:-Viewer}
+    volumes:
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./storage/observability/grafana:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    restart: unless-stopped
+    networks:
+      - backup_net
+
+networks:
+  backup_net:
+    name: backup_net

@@ -1,0 +1,189 @@
+{% extends "base_redesign.html" %}
+{% block title %}Editar grupo · {{ group.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}">Grupos</a><i data-lucide="chevron-right"></i><b>{{ group.name }}</b>{% endblock %}
+
+
+
+{% block head %}
+<style>
+  .conn-opt{display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--line);cursor:pointer;transition:all .18s}
+  .conn-opt:hover{border-color:var(--line-2)}
+  .conn-opt.selected{border-color:var(--pine);background:var(--pine-soft)}
+  .conn-ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}
+  .conn-sec{border-radius:12px;padding:18px;margin-top:12px;border:1px solid var(--line);background:var(--inset)}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.frow{grid-template-columns:1fr}}
+  .pwrap{position:relative}
+  .pwrap > .act{position:absolute;right:6px;top:50%;transform:translateY(-50%)}
+  .pwrap > input{padding-right:38px}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/groups.py edit_group): tenant, group, can_view_saved_credentials,
+   group_current_vpn_password/vpn_ipsec_secret/jump_password/jump_key, sample_device #}
+<div class="wrap" style="max-width:820px">
+  <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-ghost btn-sm" style="margin-bottom:14px"><i data-lucide="arrow-left"></i>Voltar para Grupos</a>
+
+  <div class="page-h head-row" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+    <div><div class="eyebrow">Operação</div><h1>Editar grupo</h1><p>Atualize o método de conexão e as credenciais do grupo.</p></div>
+    <div class="actions" style="display:flex;gap:10px;flex-wrap:wrap">
+      <a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, group_id=group.id) }}" class="btn btn-line"><i data-lucide="monitor-smartphone"></i>Dispositivos</a>
+      {% if group.uses_vpn and group.is_active %}
+      <form id="form-test-vpn-edit-group" action="{{ url_for('tenant_groups.test_group_vpn', tenant_slug=tenant.slug, group_id=group.id) }}" method="POST" style="display:inline">
+        {% include 'partials/csrf.html' %}
+        <button type="button" data-run-backup-live data-form-id="form-test-vpn-edit-group" class="btn btn-line"><i data-lucide="shield-check"></i>Testar VPN</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <form action="{{ url_for('tenant_groups.edit_group', tenant_slug=tenant.slug, group_id=group.id) }}" method="POST" class="panel panel-pad" x-data="{ connectionType: '{{ group.connection_type or ('vpn' if group.uses_vpn else ('jump_host' if group.uses_jump_host else 'direct')) }}' }">
+    {% include 'partials/csrf.html' %}
+
+    {% set has_saved_credentials = can_view_saved_credentials and (group_current_vpn_password or group_current_vpn_ipsec_secret or group_current_jump_password or group_current_jump_key) %}
+    {% if has_saved_credentials %}
+    <div class="conn-sec" style="border-color:var(--pine);background:var(--pine-soft);margin-top:0;margin-bottom:18px">
+      <div style="font-weight:600;font-size:14px;margin-bottom:12px">Credenciais atuais salvas</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        {% if group_current_vpn_password %}
+        <div><label class="lbl">Senha VPN atual</label><div class="pwrap"><input type="password" id="group_saved_vpn_password" readonly class="inp" value="{{ group_current_vpn_password }}"><button type="button" class="act" onclick="toggleSensitiveField('group_saved_vpn_password', this)"><i data-lucide="eye"></i></button></div></div>
+        {% endif %}
+        {% if group_current_vpn_ipsec_secret %}
+        <div><label class="lbl">IPSec Secret atual</label><div class="pwrap"><input type="password" id="group_saved_vpn_ipsec_secret" readonly class="inp" value="{{ group_current_vpn_ipsec_secret }}"><button type="button" class="act" onclick="toggleSensitiveField('group_saved_vpn_ipsec_secret', this)"><i data-lucide="eye"></i></button></div></div>
+        {% endif %}
+        {% if group_current_jump_password %}
+        <div><label class="lbl">Senha SSH atual (Jump Host)</label><div class="pwrap"><input type="password" id="group_saved_jump_password" readonly class="inp" value="{{ group_current_jump_password }}"><button type="button" class="act" onclick="toggleSensitiveField('group_saved_jump_password', this)"><i data-lucide="eye"></i></button></div></div>
+        {% endif %}
+        {% if group_current_jump_key %}
+        <div><label class="lbl">Chave privada SSH atual</label><button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:6px" onclick="toggleSensitiveBlock('group_saved_jump_key_block', this, 'Mostrar chave', 'Ocultar chave')" aria-expanded="false">Mostrar chave</button><div id="group_saved_jump_key_block" style="display:none"><textarea readonly class="inp" rows="4">{{ group_current_jump_key }}</textarea></div></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div><label class="lbl">Nome do grupo *</label><input id="group_name" type="text" name="name" value="{{ group.name }}" required class="inp" placeholder="Ex.: Provedor XYZ"></div>
+      <div><label class="lbl">Descrição</label><textarea id="group_description" name="description" class="inp" rows="3" placeholder="Descrição opcional do grupo…">{{ group.description or '' }}</textarea></div>
+
+      <div>
+        <label class="lbl" style="margin-bottom:10px">Método de conexão</label>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <label class="conn-opt" :class="{'selected': connectionType === 'direct'}">
+            <input type="radio" name="connection_type" value="direct" x-model="connectionType" style="margin-top:3px;accent-color:var(--pine);width:18px;height:18px">
+            <span class="conn-ic" style="background:var(--inset);color:var(--ink-3)"><i data-lucide="wifi"></i></span>
+            <div><div style="font-weight:600;font-size:14px">Conexão direta</div><div class="faint" style="font-size:12.5px">Conecta direto ao IP público via SSH ou Telnet.</div></div>
+          </label>
+          <label class="conn-opt" :class="{'selected': connectionType === 'vpn'}">
+            <input type="radio" name="connection_type" value="vpn" x-model="connectionType" style="margin-top:3px;accent-color:var(--pine);width:18px;height:18px">
+            <span class="conn-ic" style="background:rgba(139,92,246,.16);color:#8b5cf6"><i data-lucide="shield-check"></i></span>
+            <div><div style="font-weight:600;font-size:14px">VPN (L2TP/IPSec)</div><div class="faint" style="font-size:12.5px">Estabelece túnel seguro antes de acessar os IPs internos.</div></div>
+          </label>
+          <label class="conn-opt" :class="{'selected': connectionType === 'jump_host'}">
+            <input type="radio" name="connection_type" value="jump_host" x-model="connectionType" style="margin-top:3px;accent-color:var(--pine);width:18px;height:18px">
+            <span class="conn-ic" style="background:var(--good-soft);color:var(--good)"><i data-lucide="network"></i></span>
+            <div><div style="font-weight:600;font-size:14px">SSH Jump Host (Bastion)</div><div class="faint" style="font-size:12.5px">Conecta por servidor Linux intermediário do provedor.</div></div>
+          </label>
+
+          {# VPN #}
+          <div x-show="connectionType === 'vpn'" x-transition class="conn-sec">
+            <div style="font-weight:600;font-size:14px;margin-bottom:14px;color:#8b5cf6">Configurações VPN</div>
+            <div class="frow">
+              <div><label class="lbl">Tipo de VPN</label><select name="vpn_type" class="inp"><option value="l2tp" {{ 'selected' if group.vpn_type == 'l2tp' else '' }}>L2TP/IPSec</option></select></div>
+              <div><label class="lbl">Servidor VPN</label><input type="text" name="vpn_server" value="{{ group.vpn_server or '' }}" class="inp" placeholder="vpn.provedor.com.br"></div>
+            </div>
+            <div class="frow" style="margin-top:14px">
+              <div><label class="lbl">Usuário VPN</label><input type="text" name="vpn_username" value="{{ group.vpn_username or '' }}" class="inp" placeholder="usuario_vpn"></div>
+              <div>
+                <label class="lbl">Senha VPN</label>
+                {% if can_view_saved_credentials and group_current_vpn_password %}
+                <div class="pwrap" style="margin-bottom:8px"><input type="password" id="group_vpn_password_current" readonly class="inp" value="{{ group_current_vpn_password }}"><button type="button" class="act" onclick="toggleSensitiveField('group_vpn_password_current', this)"><i data-lucide="eye"></i></button></div>
+                {% endif %}
+                <div class="pwrap"><input type="password" id="group_vpn_password" name="vpn_password" class="inp" placeholder="Nova senha (em branco mantém)"><button type="button" class="act" onclick="toggleSensitiveField('group_vpn_password', this)"><i data-lucide="eye"></i></button></div>
+              </div>
+            </div>
+            <div style="margin-top:14px">
+              <label class="lbl">IPSec Secret (PSK)</label>
+              {% if can_view_saved_credentials and group_current_vpn_ipsec_secret %}
+              <div class="pwrap" style="margin-bottom:8px"><input type="password" id="group_vpn_ipsec_secret_current" readonly class="inp" value="{{ group_current_vpn_ipsec_secret }}"><button type="button" class="act" onclick="toggleSensitiveField('group_vpn_ipsec_secret_current', this)"><i data-lucide="eye"></i></button></div>
+              {% endif %}
+              <div class="pwrap"><input type="password" id="group_vpn_ipsec_secret" name="vpn_ipsec_secret" class="inp" placeholder="Novo segredo (em branco mantém)"><button type="button" class="act" onclick="toggleSensitiveField('group_vpn_ipsec_secret', this)"><i data-lucide="eye"></i></button></div>
+            </div>
+          </div>
+
+          {# Jump Host #}
+          <div x-show="connectionType === 'jump_host'" x-transition class="conn-sec">
+            <div style="font-weight:600;font-size:14px;margin-bottom:14px;color:var(--good)">Configurações Jump Host</div>
+            <div class="frow">
+              <div><label class="lbl">Host / IP do servidor</label><input type="text" name="jump_host" value="{{ group.jump_host or '' }}" class="inp" placeholder="ssh.provedor.com.br ou 200.x.x.x"></div>
+              <div><label class="lbl">Porta SSH</label><input type="number" name="jump_port" value="{{ group.jump_port or 22 }}" class="inp"></div>
+            </div>
+            <div class="frow" style="margin-top:14px">
+              <div><label class="lbl">Usuário SSH</label><input type="text" name="jump_username" value="{{ group.jump_username or '' }}" class="inp" placeholder="backup_user"></div>
+              <div>
+                <label class="lbl">Senha SSH</label>
+                {% if can_view_saved_credentials and group_current_jump_password %}
+                <div class="pwrap" style="margin-bottom:8px"><input type="password" id="group_jump_password_current" readonly class="inp" value="{{ group_current_jump_password }}"><button type="button" class="act" onclick="toggleSensitiveField('group_jump_password_current', this)"><i data-lucide="eye"></i></button></div>
+                {% endif %}
+                <div class="pwrap"><input type="password" id="group_jump_password" name="jump_password" class="inp" placeholder="Nova senha (em branco mantém)"><button type="button" class="act" onclick="toggleSensitiveField('group_jump_password', this)"><i data-lucide="eye"></i></button></div>
+              </div>
+            </div>
+            <div style="margin-top:14px">
+              <label class="lbl">Chave privada SSH (opcional)</label>
+              {% if can_view_saved_credentials and group_current_jump_key %}
+              <button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:6px" onclick="toggleSensitiveBlock('group_jump_key_current_block', this, 'Mostrar chave atual', 'Ocultar chave atual')" aria-expanded="false">Mostrar chave atual</button>
+              <div id="group_jump_key_current_block" style="display:none;margin-bottom:8px"><textarea readonly class="inp" rows="4">{{ group_current_jump_key }}</textarea></div>
+              {% endif %}
+              <textarea name="jump_key" class="inp" rows="3" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"></textarea>
+              <p class="faint" style="font-size:11.5px;margin-top:4px">Cole a chave para autenticação por chave.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-top:18px;border-top:1px solid var(--line)">
+      <a href="{{ url_for('tenant_operations.index', tenant_slug=tenant.slug) }}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-pine"><i data-lucide="save"></i>Salvar alterações</button>
+    </div>
+  </form>
+
+  {# Zona de perigo #}
+  <div class="panel panel-pad" style="margin-top:22px;border-color:var(--crit)">
+    <div style="font-weight:600;font-size:14px;color:var(--crit);display:flex;align-items:center;gap:8px;margin-bottom:6px"><i data-lucide="alert-triangle"></i>Zona de perigo</div>
+    <p class="faint" style="font-size:12.5px;margin-bottom:14px">Ações destrutivas para este grupo. Ao excluir, os dispositivos não são apagados, apenas perdem o vínculo com este grupo.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <form action="{{ url_for('tenant_groups.toggle_group_active', tenant_slug=tenant.slug, group_id=group.id) }}" method="POST" onsubmit="return confirm('{% if group.is_active %}Desativar{% else %}Reativar{% endif %} o grupo {{ group.name }}?')">
+        {% include 'partials/csrf.html' %}
+        <input type="hidden" name="return_to" value="edit">
+        <input type="hidden" name="action" value="{{ 'deactivate' if group.is_active else 'activate' }}">
+        <button type="submit" class="btn btn-line"><i data-lucide="{{ 'power-off' if group.is_active else 'power' }}"></i>{{ 'Desativar grupo' if group.is_active else 'Reativar grupo' }}</button>
+      </form>
+      <form action="{{ url_for('tenant_groups.delete_group', tenant_slug=tenant.slug, group_id=group.id) }}" method="POST" onsubmit="return confirm('Tem certeza que deseja excluir o grupo {{ group.name }}?')">
+        {% include 'partials/csrf.html' %}
+        <button type="submit" class="btn btn-line" style="border-color:var(--crit);color:var(--crit)"><i data-lucide="trash-2"></i>Excluir grupo</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% include 'partials/backup_live_modal.html' %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+  window.toggleSensitiveField = function (inputId, button) {
+    const input = document.getElementById(inputId); if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+    const icon = button ? button.querySelector('i[data-lucide]') : null;
+    if (icon) { icon.setAttribute('data-lucide', input.type === 'password' ? 'eye' : 'eye-off'); if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }
+  };
+  window.toggleSensitiveBlock = function (blockId, button, showLabel, hideLabel) {
+    const block = document.getElementById(blockId); if (!block || !button) return;
+    const isHidden = block.style.display === 'none' || block.style.display === '';
+    block.style.display = isHidden ? 'block' : 'none';
+    button.textContent = isHidden ? hideLabel : showLabel;
+    button.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+  };
+});
+</script>
+{% endblock %}

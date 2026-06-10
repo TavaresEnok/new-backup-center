@@ -1,0 +1,249 @@
+{% extends "base_redesign.html" %}
+{% block title %}Editar {{ device.name }} · {{ tenant.name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug) }}">Dispositivos</a><i data-lucide="chevron-right"></i><a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id) }}">{{ device.name }}</a><i data-lucide="chevron-right"></i><b>Editar</b>{% endblock %}
+
+{% block head %}
+<style>
+  .hidden{display:none !important}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.frow{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+{# Contexto real (app/web/tenant/devices.py edit_device): tenant, device, device_types, groups,
+   type_metadata, device_extra_parameters, can_view_saved_credentials, device_current_password, return_group #}
+<div class="wrap" style="max-width:900px">
+  <div class="page-h head-row" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+    <div>
+      {% if return_group %}<a href="{{ url_for('tenant_devices.list_devices', tenant_slug=tenant.slug, group_id=return_group.id) }}" class="btn btn-ghost btn-sm" style="margin-bottom:8px"><i data-lucide="arrow-left"></i>Voltar ao grupo {{ return_group.name }}</a><br>{% endif %}
+      <div class="eyebrow">Dispositivos</div><h1>Editar dispositivo</h1><p>Atualize as configurações de conexão e agendamento.</p>
+    </div>
+    <a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id, group_id=return_group.id if return_group else None) }}" class="btn btn-ghost btn-sm">Cancelar</a>
+  </div>
+
+  <form action="{{ url_for('tenant_devices.edit_device', tenant_slug=tenant.slug, device_id=device.id, group_id=return_group.id if return_group else None) }}" method="POST" style="display:flex;flex-direction:column;gap:22px">
+    {% include 'partials/csrf.html' %}
+    {% if return_group %}<input type="hidden" name="return_group_id" value="{{ return_group.id }}">{% endif %}
+
+    <div class="panel panel-pad">
+      <div style="font-family:var(--serif);font-size:19px;margin-bottom:18px">Dados de conexão</div>
+      <div class="frow">
+        <div><label class="lbl">Nome do dispositivo *</label><input type="text" name="name" value="{{ device.name }}" class="inp" required></div>
+        <div>
+          <label class="lbl">Tipo de equipamento</label>
+          <select name="device_type_id" id="device_type_id" class="inp">
+            {% for type in device_types %}
+            <option value="{{ type.id }}" data-default-port="{{ type.default_port or 22 }}" data-use-telnet="{{ '1' if type.use_telnet else '0' }}" data-script="{{ type.script_name or '' }}" data-required-parameters="{{ (type.required_parameters or '')|replace('\n', ',') }}" {% if device.device_type_id==type.id %}selected{% endif %}>{{ type.name }}</option>
+            {% endfor %}
+          </select>
+          <p id="script-hint" class="faint hidden" style="font-size:11.5px;margin-top:4px"></p>
+        </div>
+        <div><label class="lbl">Endereço IP / Host *</label><input type="text" name="ip_address" value="{{ device.ip_address }}" class="inp" required></div>
+        <div><label class="lbl">Porta SSH / Telnet *</label><input type="number" name="port" id="port" value="{{ device.port }}" class="inp" required></div>
+        <div>
+          <label class="lbl">Grupo</label>
+          <select name="group_id" class="inp">
+            <option value="">Sem grupo</option>
+            {% for group in groups %}<option value="{{ group.id }}" {% if device.group_id==group.id %}selected{% endif %}>{{ group.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="frow" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+        <div><label class="lbl">Usuário SSH *</label><input type="text" name="username" value="{{ device.username }}" class="inp" required></div>
+        <div>
+          <label class="lbl">Senha SSH</label>
+          {% if can_view_saved_credentials and device_current_password %}
+          <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-3);margin-bottom:6px">
+            <span>Senha atual salva:</span>
+            <span id="device_password_current_display" class="mono" style="font-family:var(--mono);letter-spacing:.15em">••••••••</span>
+            <button type="button" onclick="toggleCurrentPasswordDisplay()" class="act" aria-label="Mostrar/ocultar senha atual"><i id="eye-icon-current" data-lucide="eye"></i></button>
+          </div>
+          <script>
+            var _currentPwd = {{ device_current_password | tojson }};
+            var _showingPwd = false;
+            function toggleCurrentPasswordDisplay(){
+              _showingPwd = !_showingPwd;
+              var el = document.getElementById('device_password_current_display');
+              var icon = document.getElementById('eye-icon-current');
+              el.textContent = _showingPwd ? _currentPwd : '••••••••';
+              icon.setAttribute('data-lucide', _showingPwd ? 'eye-off' : 'eye');
+              if (window.lucide) window.lucide.createIcons();
+            }
+          </script>
+          {% endif %}
+          <div style="position:relative">
+            <input type="password" id="device_password" name="password" value="" placeholder="Deixe em branco para manter a senha atual" class="inp" style="padding-right:38px">
+            <button type="button" onclick="toggleSensitiveField('device_password', this)" class="act" style="position:absolute;right:8px;top:50%;transform:translateY(-50%)" aria-label="Mostrar/ocultar nova senha"><i data-lucide="eye"></i></button>
+          </div>
+          <p class="faint" style="font-size:11.5px;margin-top:4px">Digite uma nova senha para substituir. Em branco não altera.</p>
+        </div>
+      </div>
+
+      <div style="margin-top:16px"><label class="lbl">Descrição</label><textarea name="description" rows="3" class="inp">{{ device.description or '' }}</textarea></div>
+
+      <label style="display:flex;align-items:center;gap:9px;margin-top:14px;cursor:pointer;font-size:13.5px">
+        <input type="checkbox" name="use_telnet" id="use_telnet" {% if device.use_telnet %}checked{% endif %} style="width:17px;height:17px;accent-color:var(--pine)">Usar Telnet (inseguro — legados apenas)
+      </label>
+
+      <div id="extra-parameters-panel" class="hidden" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+        <div style="margin-bottom:14px"><div style="font-weight:600;font-size:14px">Parâmetros extras do script</div><div class="faint" style="font-size:12px">Campos como enable_password, community, api_key e outros segredos exigidos pelo script.</div></div>
+        <div id="extra-parameters-fields" class="frow"></div>
+      </div>
+    </div>
+
+    <div class="panel panel-pad">
+      <div style="font-family:var(--serif);font-size:19px;margin-bottom:14px">Agendamento de backup</div>
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:14px;font-weight:500;margin-bottom:8px">
+        <input type="checkbox" name="backup_scheduled" id="backup_scheduled" {% if device.backup_scheduled %}checked{% endif %} style="width:18px;height:18px;accent-color:var(--pine)">Ativar backup automático
+      </label>
+      <p class="faint" style="font-size:13px">Participa da janela automática global do tenant quando a fila estiver ativa. O horário diário é definido em <strong>Agendamentos</strong>.</p>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px">
+      <a href="{{ url_for('tenant_devices.view_device', tenant_slug=tenant.slug, device_id=device.id, group_id=return_group.id if return_group else None) }}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-pine"><i data-lucide="check"></i>Salvar alterações</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    window.toggleSensitiveField = function (inputId, button) {
+      const input = document.getElementById(inputId); if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+      const icon = button ? button.querySelector('i[data-lucide]') : null;
+      if (icon) { icon.setAttribute('data-lucide', input.type === 'password' ? 'eye' : 'eye-off'); if (window.lucide && window.lucide.createIcons) window.lucide.createIcons(); }
+    };
+
+    const typeSelect = document.getElementById('device_type_id');
+    const portInput = document.getElementById('port');
+    const telnetCheckbox = document.getElementById('use_telnet');
+    const scriptHint = document.getElementById('script-hint');
+    const extraPanel = document.getElementById('extra-parameters-panel');
+    const extraFields = document.getElementById('extra-parameters-fields');
+    const typeMetadata = {{ type_metadata|tojson }};
+    const existingExtras = {{ device_extra_parameters|tojson }};
+    const zabbixScriptName = "zabbix_backup.py";
+    const zabbixDefaultExclude = "history,history_uint,history_str,history_log,history_text,trends,trends_uint";
+
+    function prettifyLabel(name){ return (name||'').replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()); }
+    function isSensitiveParameter(name){ return /(password|secret|token|key)/i.test(name||''); }
+
+    function renderExtraParameters(typeId) {
+      extraFields.innerHTML = '';
+      const metadata = typeMetadata[typeId] || {};
+      const scriptName = String(metadata.script_name || '').toLowerCase();
+      const isZabbix = scriptName === zabbixScriptName;
+      const params = (metadata.required_parameters || []).filter((item) => {
+        if (isZabbix && item === 'db_type') return false;
+        return !['username','password','ip_address','host','hostname','port','use_telnet'].includes(item);
+      });
+      if (!params.length) { extraPanel.classList.add('hidden'); return; }
+
+      params.forEach((paramName) => {
+        const wrapper = document.createElement('div'); wrapper.className = 'form-control';
+        const label = document.createElement('label'); label.className = 'lbl'; label.setAttribute('for', `extra__${paramName}`); label.textContent = prettifyLabel(paramName);
+        const input = document.createElement('input');
+        input.type = isSensitiveParameter(paramName) ? 'password' : 'text';
+        input.name = `extra__${paramName}`; input.id = `extra__${paramName}`; input.className = 'inp'; input.autocomplete = 'off';
+        input.dataset.extraParamName = paramName; wrapper.dataset.extraParamName = paramName;
+        if (isSensitiveParameter(paramName)) {
+          input.placeholder = existingExtras[paramName] ? 'Deixe em branco para manter o valor salvo' : `Informe ${prettifyLabel(paramName)}`;
+        } else {
+          input.value = existingExtras[paramName] || ''; input.placeholder = `Valor de ${prettifyLabel(paramName)}`;
+        }
+        if (paramName === 'exclude_tables' && !input.value) input.value = zabbixDefaultExclude;
+        const help = document.createElement('p'); help.className = 'faint'; help.style.fontSize = '11.5px'; help.style.marginTop = '4px';
+        help.textContent = isSensitiveParameter(paramName) ? 'Se ficar em branco, o valor atual será mantido.' : 'Parâmetro adicional exigido pelo script deste tipo.';
+        wrapper.appendChild(label); wrapper.appendChild(input); wrapper.appendChild(help); extraFields.appendChild(wrapper);
+      });
+
+      if (isZabbix) {
+        const normalizedModeFromExtra = String(existingExtras.db_credentials_mode || '').toLowerCase();
+        const hasStoredDbCredentials = Boolean(String(existingExtras.db_name || '').trim() || String(existingExtras.db_user || '').trim() || String(existingExtras.db_password || '').trim());
+        const defaultDbMode = hasStoredDbCredentials ? 'manual' : ((normalizedModeFromExtra === 'manual' || normalizedModeFromExtra === 'automatic') ? normalizedModeFromExtra : 'automatic');
+        const automaticChecked = defaultDbMode === 'automatic' ? 'checked' : '';
+        const manualChecked = defaultDbMode === 'automatic' ? '' : 'checked';
+        const normalizedDbType = String(existingExtras.db_type || '').toLowerCase();
+        const mariaChecked = normalizedDbType === 'mariadb' || normalizedDbType === 'mysql';
+        const postgresChecked = mariaChecked ? '' : 'checked';
+        const mariadbChecked = mariaChecked ? 'checked' : '';
+        const modeBox = document.createElement('div');
+        modeBox.style.cssText = 'grid-column:1 / -1;border:1px solid var(--pine);background:var(--pine-soft);border-radius:12px;padding:16px';
+        modeBox.innerHTML = `
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <div style="font-weight:600;font-size:13.5px;color:var(--pine-deep)">Credenciais do banco Zabbix</div>
+              <div style="font-size:11.5px;color:var(--ink-2)">No modo automático, DBName/DBUser/DBPassword serão obtidos no momento do backup via zabbix_server.conf.</div>
+            </div>
+            <div>
+              <div class="lbl" style="margin-bottom:6px">Banco de dados</div>
+              <div style="display:flex;gap:16px;font-size:13.5px">
+                <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_type" value="postgres" ${postgresChecked} style="accent-color:var(--pine)">PostgreSQL</label>
+                <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_type" value="mariadb" ${mariadbChecked} style="accent-color:var(--pine)">MariaDB</label>
+              </div>
+            </div>
+            <div style="display:flex;gap:18px;font-size:13.5px">
+              <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_credentials_mode" value="automatic" ${automaticChecked} style="accent-color:var(--pine)">Automático</label>
+              <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer"><input type="radio" name="extra__db_credentials_mode" value="manual" ${manualChecked} style="accent-color:var(--pine)">Manual</label>
+            </div>
+            <p id="zabbix-autodiscovery-status" style="font-size:11.5px;color:var(--ink-2)">No modo automático, os campos de credenciais ficam ocultos e a descoberta ocorre em tempo de execução.</p>
+          </div>`;
+        extraFields.prepend(modeBox);
+      }
+
+      extraPanel.classList.remove('hidden');
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+      if (isZabbix) setupZabbixControls();
+    }
+
+    function zabbixField(paramName){ return document.querySelector(`#extra-parameters-fields input[name="extra__${paramName}"]`); }
+
+    function setupZabbixControls() {
+      const statusEl = document.getElementById('zabbix-autodiscovery-status');
+      const modeInputs = document.querySelectorAll('input[name="extra__db_credentials_mode"]');
+      const dbFieldNames = ['db_name','db_user','db_password'];
+      function currentMode() {
+        const checked = document.querySelector('input[name="extra__db_credentials_mode"]:checked');
+        if (checked) return checked.value;
+        const has = Boolean(String(existingExtras.db_name || '').trim() || String(existingExtras.db_user || '').trim() || String(existingExtras.db_password || '').trim());
+        return has ? 'manual' : 'automatic';
+      }
+      function updateModeUi() {
+        const automatic = currentMode() === 'automatic';
+        dbFieldNames.forEach((name) => {
+          const input = zabbixField(name); if (!input) return;
+          const wrapper = input.closest('.form-control'); if (wrapper) wrapper.classList.toggle('hidden', automatic);
+          input.disabled = automatic;
+          if (automatic) input.placeholder = '';
+          else if (!input.value) input.placeholder = name === 'db_password' ? 'Informe Db Password' : `Valor de ${prettifyLabel(name)}`;
+        });
+        if (statusEl) statusEl.textContent = automatic
+          ? 'No modo automático, os campos de credenciais ficam ocultos e a descoberta ocorre em tempo de execução.'
+          : 'Modo manual ativo: informe DBName/DBUser/DBPassword para usar no backup.';
+      }
+      modeInputs.forEach((el) => el.addEventListener('change', updateModeUi));
+      updateModeUi();
+    }
+
+    function refreshTypeUi(options = {}) {
+      const preserveCurrentValues = Boolean(options.preserveCurrentValues);
+      const selected = typeSelect.options[typeSelect.selectedIndex];
+      if (!selected || !selected.value) { scriptHint.classList.add('hidden'); renderExtraParameters(null); return; }
+      const defaultPort = selected.dataset.defaultPort;
+      const useTelnet = selected.dataset.useTelnet === '1';
+      const scriptName = selected.dataset.script || '';
+      if (!preserveCurrentValues && defaultPort) portInput.value = defaultPort;
+      if (!preserveCurrentValues) telnetCheckbox.checked = useTelnet;
+      if (scriptName) { scriptHint.textContent = `Script de backup: ${scriptName}`; scriptHint.classList.remove('hidden'); }
+      else scriptHint.classList.add('hidden');
+      renderExtraParameters(selected.value);
+    }
+
+    typeSelect.addEventListener('change', function () { refreshTypeUi({ preserveCurrentValues: false }); });
+    refreshTypeUi({ preserveCurrentValues: true });
+  });
+</script>
+{% endblock %}
