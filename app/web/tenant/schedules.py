@@ -10,8 +10,10 @@ from app.models.tenant import Tenant
 from app.models.schedule import Schedule, ScheduleFrequency
 from app.models.device import Device
 from app.models.device_group import DeviceGroup
+from app.models.notification import Notification
 from app.models.user import UserRole
-from sqlalchemy import or_
+from app.models.user import User
+from sqlalchemy import or_, text
 from sqlalchemy.orm import joinedload
 from app.services.activity_service import ActivityService
 from app.celery_app import celery_app
@@ -243,6 +245,13 @@ def list_schedules(tenant_slug):
         "default_daily_time": default_daily_time,
     }
 
+    notification_count = (
+        db.query(Notification)
+        .join(User, Notification.user_id == User.id)
+        .filter(User.tenant_id == tenant.id)
+        .count()
+    )
+
     group_overview = []
     for group_data in group_overview_map.values():
         if group_data["total"] == 0:
@@ -296,6 +305,7 @@ def list_schedules(tenant_slug):
         missing_auto_total_pages=missing_auto_total_pages,
         missing_auto_start=missing_auto_start,
         missing_auto_end=missing_auto_end,
+        notification_count=notification_count,
     )
 
 
@@ -541,4 +551,50 @@ def stop_all_backups(tenant_slug):
         f"Lotes finalizados: {stats['bulk_marked_stopped']}.",
         'warning',
     )
+    return redirect(url_for('tenant_schedules.list_schedules', tenant_slug=tenant_slug))
+
+
+@bp.route('/notifications/clear', methods=['POST'])
+@login_required
+@tenant_admin_required
+def clear_notifications(tenant_slug):
+    db, tenant = get_db_and_tenant(tenant_slug)
+    if not tenant:
+        db.close()
+        return "Tenant not found", 404
+
+    try:
+        before = (
+            db.query(Notification)
+            .join(User, Notification.user_id == User.id)
+            .filter(User.tenant_id == tenant.id)
+            .count()
+        )
+        result = db.execute(
+            text(
+                "DELETE FROM notifications n "
+                "USING users u "
+                "WHERE n.user_id = u.id AND u.tenant_id = CAST(:tenant_id AS uuid)"
+            ),
+            {"tenant_id": str(tenant.id)},
+        )
+        removed = int(result.rowcount or before or 0)
+
+        user_id = session.get('user_id')
+        ActivityService.log_action(
+            db,
+            tenant.id,
+            user_id,
+            "NOTIFICATIONS_CLEAR",
+            f"Limpeza manual de notificacoes: removidas={removed}.",
+            request.remote_addr,
+        )
+        db.commit()
+        flash(f'Notificacoes limpas com sucesso: {removed} registro(s) removido(s).', 'success')
+    except Exception as exc:
+        db.rollback()
+        flash(f'Erro ao limpar notificacoes: {exc}', 'error')
+    finally:
+        db.close()
+
     return redirect(url_for('tenant_schedules.list_schedules', tenant_slug=tenant_slug))
