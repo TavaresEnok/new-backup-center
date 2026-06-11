@@ -607,9 +607,16 @@
                         </div>
                         <div class="device-pick-scroll">
                             {% for d in group_devices_for_subgroup %}
+                            {% set subgroup_device_status = (d.last_backup_status or '')|lower %}
+                            {% set subgroup_device_status_label = 'Sucesso' if subgroup_device_status == 'success' else ('Falha' if subgroup_device_status in ['failure', 'failed'] else 'Sem histórico') %}
+                            {% set subgroup_device_status_class = 'success' if subgroup_device_status == 'success' else ('fail' if subgroup_device_status in ['failure', 'failed'] else 'neutral') %}
+                            {% set subgroup_device_status_icon = 'check-circle-2' if subgroup_device_status == 'success' else ('x-circle' if subgroup_device_status in ['failure', 'failed'] else 'clock') %}
                             <label class="subgroup-device-row"
                                 data-name="{{ (d.name or '')|lower }}"
                                 data-ip="{{ (d.ip_address or '')|lower }}"
+                                data-type="{{ (d.type.name if d.type else '')|lower }}"
+                                data-subgroup="{{ (d.subgroup.name if d.subgroup and d.subgroup.is_active else '')|lower }}"
+                                data-status="{{ subgroup_device_status_label|lower }} {{ subgroup_device_status }}"
                                 data-current-subgroup-id="{{ d.subgroup_id if d.subgroup_id else '' }}">
                                 <input type="checkbox" class="subgroup-device-checkbox" value="{{ d.id }}">
                                 <span class="subgroup-device-main">
@@ -619,6 +626,9 @@
                                         {% if d.type %} · {{ d.type.name }}{% endif %}
                                         {% if d.subgroup and d.subgroup.is_active %} · Atual: {{ d.subgroup.name }}{% endif %}
                                     </span>
+                                </span>
+                                <span class="subgroup-device-status {{ subgroup_device_status_class }}" title="Último backup: {{ subgroup_device_status_label }}">
+                                    <i data-lucide="{{ subgroup_device_status_icon }}"></i>{{ subgroup_device_status_label }}
                                 </span>
                             </label>
                             {% else %}
@@ -938,7 +948,15 @@
             subgroupDeviceRows.forEach((row) => {
                 const name = String(row.dataset.name || '');
                 const ip = String(row.dataset.ip || '');
-                const visible = !term || name.includes(term) || ip.includes(term);
+                const type = String(row.dataset.type || '');
+                const subgroup = String(row.dataset.subgroup || '');
+                const status = String(row.dataset.status || '');
+                const visible = !term
+                    || name.includes(term)
+                    || ip.includes(term)
+                    || type.includes(term)
+                    || subgroup.includes(term)
+                    || status.includes(term);
                 row.classList.toggle('hidden', !visible);
                 if (visible) visibleCount += 1;
             });
