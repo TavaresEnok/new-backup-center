@@ -33,10 +33,10 @@
   </div>
 
   {# Summary strip #}
-  <div class="panel summary">
-    <div class="sm"><div class="n">{{ stats.total }}</div><div class="l">execuções</div></div>
-    <div class="sm"><div class="n" style="color:var(--pine)">{{ stats.success }}</div><div class="l">concluídas</div></div>
-    <div class="sm"><div class="n" style="color:var(--care)">{{ stats.failed }}</div><div class="l">pendências</div></div>
+  <div class="panel summary" title="Resumo dos últimos {{ stats.days or 7 }} dias">
+    <div class="sm"><div class="n">{{ stats.total }}</div><div class="l">execuções em 7 dias</div></div>
+    <div class="sm"><div class="n" style="color:var(--pine)">{{ stats.success }}</div><div class="l">concluídas em 7 dias</div></div>
+    <div class="sm"><div class="n" style="color:var(--care)">{{ stats.failed }}</div><div class="l">pendências em 7 dias</div></div>
     <div class="sm"><div class="n">{{ success_rate }}%</div><div class="l">taxa de sucesso</div></div>
   </div>
 

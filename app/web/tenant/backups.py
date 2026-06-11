@@ -23,6 +23,7 @@ import uuid
 import os
 import time
 from collections import defaultdict
+from datetime import datetime, timedelta
 
 bp = Blueprint('tenant_backups', __name__, url_prefix='/tenant/<tenant_slug>/backups')
 
@@ -507,17 +508,18 @@ def list_backups(tenant_slug):
         Device.is_active == True
     ).order_by(Device.name).all()
     
-    # Estatísticas
+    # Estatisticas do resumo: a tela anuncia "Ultimos 7 dias", entao os cards
+    # nao devem mostrar o total historico acumulado do tenant.
+    stats_since = datetime.utcnow() - timedelta(days=7)
+    stats_base_query = db.query(Backup).join(Device).filter(
+        Device.tenant_id == tenant.id,
+        Backup.created_at >= stats_since,
+    )
     stats = {
-        'total': total,
-        'success': db.query(Backup).join(Device).filter(
-            Device.tenant_id == tenant.id,
-            Backup.status == BackupStatus.SUCCESS
-        ).count(),
-        'failed': db.query(Backup).join(Device).filter(
-            Device.tenant_id == tenant.id,
-            Backup.status == BackupStatus.FAILED
-        ).count(),
+        'total': stats_base_query.count(),
+        'success': stats_base_query.filter(Backup.status == BackupStatus.SUCCESS).count(),
+        'failed': stats_base_query.filter(Backup.status == BackupStatus.FAILED).count(),
+        'days': 7,
     }
     
     db.close()
